@@ -1,0 +1,66 @@
+# Kinetix3D Studio — centralized version catalog.
+# Base toolchain (agp / kotlin / composeBom / coreKtx / lifecycle / activityCompose)
+# is the new-compose-project tested set (SDK 37, Gradle 9.7.1).
+# Everything else is the current stable release verified against Google Maven /
+# Maven Central at scaffold time (Nov 2026).
+[versions]
+agp = "9.5.0"
+kotlin = "2.4.10"
+kotlinxCoroutines = "1.11.0"
+kotlinxCollectionsImmutable = "0.5.2"
+kotlinxSerializationProtobuf = "1.13.0"
+composeBom = "2026.09.00"
+material3WindowSize = "1.4.0"
+coreKtx = "1.19.1"
+lifecycleRuntime = "2.11.0"
+activityCompose = "1.13.0"
+sqlite = "2.7.1"
+room = "2.8.5"
+media3 = "1.11.1"
+filament = "1.80.1"
+litert = "2.3.2"
+
+[libraries]
+# Kotlin / coroutines
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
+kotlinx-serialization-protobuf = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-protobuf", version.ref = "kotlinxSerializationProtobuf" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+kotlin-test-junit5 = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit5", version.ref = "kotlin" }
+
+# AndroidX core / lifecycle / activity
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntime" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntime" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+
+# Compose
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material3-windowsize = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSize" }
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+
+# Database & persistence (Phase 1+: SQLite WAL journal, Room media-pool index)
+androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "sqlite" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+
+# Media & native (Phase 3+: decoder pool, All-I proxy worker)
+androidx-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+androidx-media3-extractor = { group = "androidx.media3", name = "media3-extractor", version.ref = "media3" }
+
+# 3D stage & offline AI (Phase 6+/7+; filament ships on Maven Central, litert on Google Maven)
+filament-android = { group = "com.google.android.filament", name = "filament-android", version.ref = "filament" }
+litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

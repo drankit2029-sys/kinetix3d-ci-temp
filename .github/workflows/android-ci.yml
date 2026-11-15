@@ -1,0 +1,51 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Caches ~/.gradle/caches and ~/.gradle/wrapper, keyed on the
+      # Gradle/version-catalog configuration. .cxx objects are cached
+      # separately below (no CMake sources yet, kept for Phase 3+).
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache CMake/NDK objects
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cxx
+            **/.cxx
+          key: cmake-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            cmake-${{ runner.os }}-
+
+      - name: Unit tests (JVM — model & evaluator)
+        run: ./gradlew :core-model:test :core-evaluator:test --console=plain
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --console=plain
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinetix3d-studio-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
