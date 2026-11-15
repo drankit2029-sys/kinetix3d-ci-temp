@@ -1,0 +1,17 @@
+[package]
+name = "kinetix_audio"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+# Rust native core for :engine-media (audio DSP + beat detection in Phase 3).
+# No first-party C/C++ anywhere in this repository — native code is Rust.
+[dependencies]
+jni = "0.22"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"

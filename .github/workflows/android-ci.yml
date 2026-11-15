@@ -22,20 +22,29 @@ jobs:
           java-version: "21"
 
       # Caches ~/.gradle/caches and ~/.gradle/wrapper, keyed on the
-      # Gradle/version-catalog configuration. .cxx objects are cached
-      # separately below (no CMake sources yet, kept for Phase 3+).
+      # Gradle/version-catalog configuration.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache CMake/NDK objects
-        uses: actions/cache@v4
-        with:
-          path: |
-            .cxx
-            **/.cxx
-          key: cmake-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
-          restore-keys: |
-            cmake-${{ runner.os }}-
+      # ubuntu-latest does not ship our exact SDK/NDK levels; install them
+      # deterministically instead of relying on whatever the image has.
+      - name: Install Android SDK (API 37.1), build-tools & NDK r28c
+        run: |
+          set -euxo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-37.1" "build-tools;37.0.0" "ndk;28.2.13676358"
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+
+      # cargo-ndk (via the io.github.rodroidmods.android-rust plugin) links the
+      # Rust core; preinstall the stable toolchain and Android targets.
+      - name: Install Rust toolchain, Android targets & cargo-ndk
+        run: |
+          set -euxo pipefail
+          rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          rustc --version
+          # x86_64 runner: drives the NDK for all four ABIs (see engine-media/build.gradle.kts)
+          cargo install cargo-ndk --locked
 
       - name: Unit tests (JVM — model & evaluator)
         run: ./gradlew :core-model:test :core-evaluator:test --console=plain
@@ -43,9 +52,9 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --console=plain
 
-      - name: Upload debug APK
+      - name: Upload debug-signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: kinetix3d-studio-debug-apk
+          name: kinetix3d-studio-debug-signed-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14

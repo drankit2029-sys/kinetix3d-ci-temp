@@ -8,3 +8,6 @@ local.properties
 .externalNativeBuild/
 captures/
 *.apk
+
+# Rust
+target/

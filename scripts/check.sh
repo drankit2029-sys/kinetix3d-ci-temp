@@ -78,7 +78,9 @@ printf '%s\n' \
     "$PROJECT_DIR_NAME/.idea" \
     "$PROJECT_DIR_NAME/screenshots" \
     "$PROJECT_DIR_NAME/.kotlin" \
-    "$PROJECT_DIR_NAME/.git" >"$EXCLUDE_FILE"
+    "$PROJECT_DIR_NAME/.git" \
+    "$PROJECT_DIR_NAME/*/rust/target" \
+    "$PROJECT_DIR_NAME/*/build" >"$EXCLUDE_FILE"
 tar --exclude-from="$EXCLUDE_FILE" -czf "$TMP" -C "$(dirname "$SRC")" "$PROJECT_DIR_NAME"
 echo "      archive: $(du -h "$TMP" | awk '{print $1}')"
 
@@ -111,7 +113,7 @@ if [ ! -x "$KTLINT_BIN" ]; then
     curl -fsSL https://github.com/pinterest/ktlint/releases/download/1.8.0/ktlint -o "$KTLINT_BIN"
     chmod +x "$KTLINT_BIN"
 fi
-mapfile -d '' files < <(find . -path ./.git -prune -o -path './build' -prune -o -path '*/build' -prune -o -name '*.kt' -print0)
+mapfile -d '' files < <(find . -path ./.git -prune -o -path '*/build' -prune -o -path '*/target' -prune -o -name '*.kt' -print0)
 if [ "${#files[@]}" -gt 0 ]; then
     "$KTLINT_BIN" "${files[@]}"
 fi

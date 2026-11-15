@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -39,6 +41,13 @@ private val StudioBackground = Color(0xFF10141B)
 private val StudioAccent = Color(0xFF38E1C6)
 private val StudioMuted = Color(0xFF8A94A3)
 private val StudioText = Color(0xFFE7ECF3)
+
+private fun probeRustAbi(): String =
+    try {
+        "abi v${KinetixAudioNative.abiVersion()}"
+    } catch (t: Throwable) {
+        "unavailable (${t.javaClass.simpleName})"
+    }
 
 private data class StudioModule(
     val name: String,
@@ -91,6 +100,12 @@ fun KinetixStudioApp() {
                 studioModules.forEach { module ->
                     ModuleRow(module)
                 }
+                Text(
+                    text = "rust audio core: ${remember { probeRustAbi() }}",
+                    color = StudioAccent,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
                 Text(
                     text = "minSdk 26 · targetSdk 37 · compileSdk 37 · RGBA16F pipeline",
                     color = StudioMuted,

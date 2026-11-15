@@ -1,16 +1,15 @@
 # Kinetix3D Studio — centralized version catalog.
-# Base toolchain (agp / kotlin / composeBom / coreKtx / lifecycle / activityCompose)
-# is the new-compose-project tested set (SDK 37, Gradle 9.7.1).
-# Everything else is the current stable release verified against Google Maven /
-# Maven Central at scaffold time (Nov 2026).
+# Everything here is the latest stable release verified against Google Maven /
+# Maven Central / the Gradle plugin portal (Nov 2026):
+# AGP 9.5.1 (max API 37), Kotlin 2.4.21, Gradle 9.9.1 (see gradle-wrapper.properties),
+# Compose BOM 2026.09.00, JDK 21 (OpenJDK).
 [versions]
-agp = "9.5.0"
-kotlin = "2.4.10"
+agp = "9.5.1"
+kotlin = "2.4.21"
 kotlinxCoroutines = "1.11.0"
 kotlinxCollectionsImmutable = "0.5.2"
 kotlinxSerializationProtobuf = "1.13.0"
 composeBom = "2026.09.00"
-material3WindowSize = "1.4.0"
 coreKtx = "1.19.1"
 lifecycleRuntime = "2.11.0"
 activityCompose = "1.13.0"
@@ -30,6 +29,7 @@ kotlinx-serialization-protobuf = { group = "org.jetbrains.kotlinx", name = "kotl
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit5 = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit5", version.ref = "kotlin" }
 
+# material3-window-size-class is version-managed by the Compose BOM (verified in the BOM POM).
 # AndroidX core / lifecycle / activity
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntime" }
@@ -43,14 +43,14 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material3-windowsize = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSize" }
+androidx-compose-material3-windowsize = { group = "androidx.compose.material3", name = "material3-window-size-class" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 
 # Database & persistence (Phase 1+: SQLite WAL journal, Room media-pool index)
 androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "sqlite" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 
-# Media & native (Phase 3+: decoder pool, All-I proxy worker)
+# Media & native (Phase 3+: decoder pool, All-I proxy worker; native core is Rust)
 androidx-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
 androidx-media3-extractor = { group = "androidx.media3", name = "media3-extractor", version.ref = "media3" }
 
