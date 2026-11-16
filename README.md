@@ -12,10 +12,10 @@ The design specs are kept in the parent folder (not versioned):
 
 | Module | Type | Responsibility |
 | :--- | :--- | :--- |
-| `:app` | Application | Thin shell: `MainActivity`, DI root, crash-guard entry, adaptive launcher icon |
-| `:core-platform-api` | Android library | Version-adaptive OS API managers (API 26–37+), first-boot `HardwareCapabilityProfiler` |
-| `:core-model` | Kotlin/JVM | `DeviceCapabilityProfile`, immutable `ProjectState` tree, `NodeGraph`, `TransientMutationManager`, SQLite `<0.8ms` WAL journal |
-| `:core-evaluator` | Kotlin/JVM | Cubic-Bezier / damped-spring solvers, `SplineArcLengthTable`, Oklab/SLERP math, expression bytecode VM |
+| `:app` | Application | Thin shell: `MainActivity`, app-level wiring root (`PlatformApiProvider` singleton), crash-guard entry, adaptive launcher icon |
+| `:core-platform-api` | Android library | All 7 version-adaptive OS API managers (API 26–37+) behind the `PlatformApi` façade + hand-written `PlatformApiProvider` (no DI framework); first-boot `HardwareCapabilityProfiler`; `AndroidWalJournal` (WAL/SQLite, `user_version=1`, idempotent replay) |
+| `:core-model` | Kotlin/JVM | `DeviceCapabilityProfile`, immutable `ProjectState` tree (`trackId`, `sourceInUs`/`sourceOutUs`, `timeRemap`/`TimeRemapSpec` (`ConstantRate`/`VelocityBezierCurve`)), `NodeGraph` + `topoSort()`, `WalJournal` contract (in-memory double for JVM tests), `DirtyRenderLock`, `TransientMutationManager`, `KinetixOperatorSchema` + 14-operator v1.0 catalog |
+| `:core-evaluator` | Kotlin/JVM | Cubic-Bezier / damped-spring solvers (O(1), closed-form), `SplineArcLengthTable` (512-entry LUT + Bishop frames), expression bytecode VM, `SpeedRampIntegrator` |
 | `:engine-media` | Android library (+ **Rust**) | MediaCodec decoder pool, VFR→CFR H.264 All-I proxy worker, Rust audio DSP & beat detection (`rust/`, cargo-ndk) |
 | `:engine-render` | Android library | OpenGL ES 3.2 DAG compiler, `DoD` FBO pool, 512×512 tile-bucket composer, stateless `Particles2D/3D` |
 | `:engine-ai` | Android library | Offline NPU AI suite (SAM 2, DepthAnythingV2, Whisper, RIFE Lite) |
@@ -54,10 +54,18 @@ JVM unit tests → `assembleDebug` → debug-signed APK via `actions/upload-arti
 
 ## Manifest & permissions
 
-The app manifest requests **zero permissions by design**. Add a permission only
-together with the feature that needs it (`INTERNET` for v1.5+ local transfer,
-`RECORD_AUDIO` for the Phase 3 voiceover recorder, `READ_MEDIA_*`/legacy
-`READ_EXTERNAL_STORAGE` for Phase 3 import, `FOREGROUND_SERVICE` for export).
+Manifests request only permissions paired with shipped features. Phase 1 ships
+`VIBRATE` (haptics in `HapticsAndInputApiManager`) and `WRITE_EXTERNAL_STORAGE`
+with `maxSdkVersion="28"` (API ≤ 28 `DIRECTORY_MOVIES` export fallback; MediaStore
+`IS_PENDING` on 29+ needs none). A merged-in `READ_EXTERNAL_STORAGE` with no
+Phase-1 feature was stripped with a `tools:node="remove"` merger marker; it returns
+(API 26–32) together with Phase 3 media import. `androidx.media3-exoplayer` injects
+`ACCESS_NETWORK_STATE` + `WAKE_LOCK` (normal install-time, no prompt) — accepted as a
+dependency contract.
+Add any further permission only together with the feature that needs it
+(`INTERNET` for v1.5+ local transfer, `RECORD_AUDIO` for the Phase 3 voiceover
+recorder, `READ_MEDIA_*`/legacy `READ_EXTERNAL_STORAGE` for Phase 3 import,
+`FOREGROUND_SERVICE` for export).
 The template's `INTERNET`/`REQUEST_INSTALL_PACKAGES`/cleartext-traffic/`FileProvider`
 were removed deliberately; re-add only when a feature requires them.
 
