@@ -70,14 +70,16 @@ val abiToTriple = mapOf(
 fun registerCargoBuild(buildType: String, release: Boolean): TaskProvider<Exec> {
     val buildTypeCap = buildType.replaceFirstChar { it.uppercase() }
     val outDir = layout.buildDirectory.dir("rustJniLibs/$buildType").get().asFile
+    val rustDir = layout.projectDirectory.dir("rust").asFile
     return tasks.register<Exec>("cargoBuild$buildTypeCap") {
         group = "rust"
         description = "Builds the Rust native core ($buildType) for ${rustAbis.joinToString()}"
-        // Belt-and-braces: opted out of CC serialization; with CC-safe inputs
-        // it should be a no-op.
-        notCompatibleWithConfigurationCache("invokes cargo external process")
-        workingDir = file("rust")
-        inputs.files(fileTree(project.layout.projectDirectory.dir("rust"))
+        // Configuration-cache safe: the task actions below capture only plain
+        // JDK values. Never call Project receivers (file(), logger, ...) from a
+        // doFirst/doLast closure — that captures the script object and makes
+        // Gradle discard the whole configuration-cache entry on every build.
+        workingDir = rustDir
+        inputs.files(fileTree(rustDir)
             .include("**/*.rs", "**/Cargo.toml", "**/Cargo.lock")
             .exclude("target/**"))
         inputs.property("rustAbis", rustAbis)
@@ -99,13 +101,13 @@ fun registerCargoBuild(buildType: String, release: Boolean): TaskProvider<Exec> 
             val cmd = mutableListOf("cargo", "build", "--target", triple)
             if (release) cmd += "--release"
             commandLine(*cmd.toTypedArray())
+            val profileDir = if (release) "release" else "debug"
+            val builtSo = File(rustDir, "target/$triple/$profileDir/libkinetix_audio.so")
             doLast {
-                val profileDir = if (release) "release" else "debug"
-                val src = file("rust/target/$triple/$profileDir/libkinetix_audio.so")
+                check(builtSo.exists()) { "cargo did not produce $builtSo" }
                 val dst = File(outDir, "arm64-v8a/libkinetix_audio.so")
-                check(src.exists()) { "cargo did not produce $src" }
                 dst.parentFile.mkdirs()
-                src.copyTo(dst, overwrite = true)
+                builtSo.copyTo(dst, overwrite = true)
             }
         }
     }
