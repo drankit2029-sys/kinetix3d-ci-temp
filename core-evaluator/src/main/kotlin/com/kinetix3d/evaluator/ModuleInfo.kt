@@ -1,9 +1,8 @@
 /*
  * Kinetix3D Studio — core-evaluator
- * Cubic-Bezier / damped-spring solvers, ArcLengthLUT, Oklab color and SLERP math, Expression VM.
- *
- * Day-1 scaffold marker only; the real implementation lands in the phase
- * pinned by kinetix3d_step_by_step_implementation_roadmap.md.
+ * Cubic-Bezier / damped-spring solvers (O(1) closed form), 512-entry ArcLengthLUT,
+ * Bishop parallel-transport frames, Expression bytecode VM, SpeedRampIntegrator.
+ * Oklab color interpolation lands with the color-grade pipeline (Phase 5), not here.
  */
 
 package com.kinetix3d.evaluator

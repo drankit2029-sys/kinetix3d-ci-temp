@@ -1,9 +1,7 @@
 /*
  * Kinetix3D Studio — core-model
- * Immutable ProjectState tree, NodeGraph model, TransientMutationManager, SQLite WAL crash journal.
- *
- * Day-1 scaffold marker only; the real implementation lands in the phase
- * pinned by kinetix3d_step_by_step_implementation_roadmap.md.
+ * Immutable ProjectState tree, NodeGraph (topoSort), KinetixOperatorSchema catalog,
+ * TimeRemapSpec, DirtyRenderLock, TransientMutationManager, SQLite WAL contract (+ in-memory double).
  */
 
 package com.kinetix3d.model
