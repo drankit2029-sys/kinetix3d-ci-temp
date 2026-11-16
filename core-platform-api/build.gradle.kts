@@ -27,4 +27,6 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.sqlite.framework)
+    implementation(libs.kotlinx.serialization.protobuf)
 }
