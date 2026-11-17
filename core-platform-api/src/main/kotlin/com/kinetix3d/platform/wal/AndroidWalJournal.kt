@@ -23,63 +23,54 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Crash-recovery journal backed by a single SQLite database under
  * `filesDir/wal/<dbName>`.
  *
- * Sequence ids are assigned as `MAX(seq_id) + 1` and are never renumbered, so
- * replay `seq_id > lastAppliedSeq` stays stable across checkpoints.
+ * The database is opened lazily on [Dispatchers.IO]: constructing the journal
+ * (for example in `Application.onCreate`) never touches SQLite. [projectId]
+ * scopes the file to `kinetix_wal_<sha256(projectId).take(16)>.db`, so switching
+ * projects cannot replay another project's mutations.
+ *
+ * Sequence ids are cached in memory (`MAX(seq_id) + 1` at open, incremented per
+ * insert) and never renumbered, so replay `seq_id > lastAppliedSeq` stays stable
+ * across checkpoints.
  *
  * Corrupt payloads fail loudly with [IllegalStateException] carrying the row's
  * seq id: silently skipping a mutation would silently fork project state.
  */
 class AndroidWalJournal(
     context: Context,
-    dbName: String = "kinetix_wal.db",
+    projectId: String? = null,
 ) : WalJournal,
     AutoCloseable {
+    private val appContext = context.applicationContext
+    private val databaseName = databaseNameFor(projectId)
     private val mutex = Mutex()
     private val closed = AtomicBoolean(false)
-    private val helper: SupportSQLiteOpenHelper
-    private val database: SupportSQLiteDatabase
+    private val initLock = Any()
 
-    init {
-        val appContext = context.applicationContext
-        val directory = File(appContext.filesDir, WAL_DIRECTORY)
-        if (!directory.exists() && !directory.mkdirs()) {
-            throw IOException("Unable to create WAL directory ${directory.absolutePath}")
-        }
-        val dbFile = File(directory, dbName)
-        val configuration =
-            SupportSQLiteOpenHelper.Configuration
-                .builder(appContext)
-                .name(dbFile.absolutePath)
-                .callback(JournalOpenCallback())
-                .build()
-        helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
-        helper.setWriteAheadLoggingEnabled(true)
-        database = helper.writableDatabase
-        if (!database.enableWriteAheadLogging()) {
-            Log.d(TAG, "SQLite WAL mode was not accepted for ${dbFile.absolutePath}")
-        }
-        database.execSQL("PRAGMA synchronous = NORMAL")
-        database.execSQL("PRAGMA user_version = $SCHEMA_VERSION")
-        database.execSQL(CREATE_MUTATIONS_TABLE)
-        database.execSQL(CREATE_STATE_TABLE)
-        database.execSQL(SEED_STATE_ROW)
-    }
+    @Volatile
+    private var helper: SupportSQLiteOpenHelper? = null
+
+    @Volatile
+    private var database: SupportSQLiteDatabase? = null
+
+    /** Next sequence id, initialized from the database and advanced under [mutex]. */
+    private var nextSeqIdCache: Long = 1L
 
     override suspend fun append(mutation: Mutation): Long =
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                ensureOpen()
+                val db = requireDatabase()
                 val payload = MutationCodec.encode(mutation)
                 val timestampMs = System.currentTimeMillis()
-                database.beginTransaction()
+                db.beginTransaction()
                 try {
-                    val seqId = nextSeqId()
+                    val seqId = nextSeqIdCache
                     val values =
                         ContentValues().apply {
                             put(COLUMN_SEQ_ID, seqId)
@@ -87,12 +78,13 @@ class AndroidWalJournal(
                             put(COLUMN_MUTATION_PROTO, payload)
                         }
                     val conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE
-                    val inserted = database.insert(TABLE_MUTATIONS, conflictAlgorithm, values)
+                    val inserted = db.insert(TABLE_MUTATIONS, conflictAlgorithm, values)
                     check(inserted != -1L) { "Failed to append WAL mutation at seq_id=$seqId" }
-                    database.setTransactionSuccessful()
+                    nextSeqIdCache = seqId + 1L
+                    db.setTransactionSuccessful()
                     seqId
                 } finally {
-                    database.endTransaction()
+                    db.endTransaction()
                 }
             }
         }
@@ -100,8 +92,7 @@ class AndroidWalJournal(
     override suspend fun readFrom(seqId: Long): List<Mutation> =
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                ensureOpen()
-                database
+                requireDatabase()
                     .query(
                         "SELECT $COLUMN_SEQ_ID, $COLUMN_MUTATION_PROTO FROM $TABLE_MUTATIONS " +
                             "WHERE $COLUMN_SEQ_ID > ? ORDER BY $COLUMN_SEQ_ID ASC",
@@ -126,27 +117,29 @@ class AndroidWalJournal(
         }
 
     /**
-     * Keeps the newest [keepLast] rows without renumbering survivors. The
-     * `wal_state.last_applied_seq` marker is untouched by pruning; markApplied
-     * has already persisted it. Callers should checkpoint only after replay.
+     * Prunes only rows that were already replayed (`seq_id <= last_applied_seq`),
+     * always keeping the newest [keepLast] rows. Unapplied work is never deleted,
+     * and survivors keep their original sequence ids.
      */
     override suspend fun checkpoint(keepLast: Int): Unit =
         withContext(Dispatchers.IO) {
             require(keepLast >= 0) { "keepLast must be non-negative" }
             mutex.withLock {
-                ensureOpen()
-                database.beginTransaction()
+                val db = requireDatabase()
+                db.beginTransaction()
                 try {
-                    database.execSQL(
-                        "DELETE FROM $TABLE_MUTATIONS WHERE $COLUMN_SEQ_ID NOT IN (" +
+                    db.execSQL(
+                        "DELETE FROM $TABLE_MUTATIONS " +
+                            "WHERE $COLUMN_SEQ_ID <= " +
+                            "(SELECT $COLUMN_LAST_APPLIED FROM $TABLE_WAL_STATE WHERE $COLUMN_ID = 1) " +
+                            "AND $COLUMN_SEQ_ID NOT IN (" +
                             "SELECT $COLUMN_SEQ_ID FROM $TABLE_MUTATIONS " +
                             "ORDER BY $COLUMN_SEQ_ID DESC LIMIT ?)",
                         arrayOf<Any?>(keepLast),
                     )
-                    database.execSQL(SEED_STATE_ROW)
-                    database.setTransactionSuccessful()
+                    db.setTransactionSuccessful()
                 } finally {
-                    database.endTransaction()
+                    db.endTransaction()
                 }
             }
         }
@@ -154,8 +147,7 @@ class AndroidWalJournal(
     override suspend fun lastAppliedSeq(): Long =
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                ensureOpen()
-                database
+                requireDatabase()
                     .query(
                         "SELECT $COLUMN_LAST_APPLIED FROM $TABLE_WAL_STATE WHERE $COLUMN_ID = 1",
                     ).use { cursor ->
@@ -167,9 +159,7 @@ class AndroidWalJournal(
     override suspend fun markApplied(seqId: Long): Unit =
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                ensureOpen()
-                database.execSQL(SEED_STATE_ROW)
-                database.execSQL(
+                requireDatabase().execSQL(
                     "UPDATE $TABLE_WAL_STATE SET $COLUMN_LAST_APPLIED = MAX($COLUMN_LAST_APPLIED, ?) " +
                         "WHERE $COLUMN_ID = 1",
                     arrayOf<Any?>(seqId),
@@ -179,23 +169,69 @@ class AndroidWalJournal(
 
     override fun close() {
         if (closed.compareAndSet(false, true)) {
-            helper.close()
+            helper?.close()
+            helper = null
+            database = null
         }
     }
 
-    private fun nextSeqId(): Long {
-        database.query("SELECT MAX($COLUMN_SEQ_ID) FROM $TABLE_MUTATIONS").use { cursor ->
-            return if (cursor.moveToFirst() && !cursor.isNull(0)) {
+    /**
+     * Double-checked lazy open. Every caller already runs on [Dispatchers.IO], but
+     * the explicit `withContext` keeps the guarantee when a method is invoked from
+     * a test or a future non-IO caller.
+     */
+    private suspend fun requireDatabase(): SupportSQLiteDatabase {
+        check(!closed.get()) { "AndroidWalJournal is closed" }
+        database?.let { return it }
+        return withContext(Dispatchers.IO) {
+            database ?: synchronized(initLock) {
+                database ?: openDatabase().also { database = it }
+            }
+        }
+    }
+
+    private fun openDatabase(): SupportSQLiteDatabase {
+        val directory = File(appContext.filesDir, WAL_DIRECTORY)
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IOException("Unable to create WAL directory ${directory.absolutePath}")
+        }
+        val dbFile = File(directory, databaseName)
+        val configuration =
+            SupportSQLiteOpenHelper.Configuration
+                .builder(appContext)
+                .name(dbFile.absolutePath)
+                .callback(JournalOpenCallback())
+                .build()
+        val createdHelper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        createdHelper.setWriteAheadLoggingEnabled(true)
+        val db =
+            try {
+                createdHelper.writableDatabase
+            } catch (throwable: Throwable) {
+                runCatching { createdHelper.close() }
+                throw throwable
+            }
+        if (!db.enableWriteAheadLogging()) {
+            Log.d(TAG, "SQLite WAL mode was not accepted for ${dbFile.absolutePath}")
+        }
+        db.execSQL("PRAGMA synchronous = NORMAL")
+        db.execSQL("PRAGMA user_version = $SCHEMA_VERSION")
+        db.execSQL(CREATE_MUTATIONS_TABLE)
+        db.execSQL(CREATE_STATE_TABLE)
+        db.execSQL(SEED_STATE_ROW)
+        nextSeqIdCache = queryNextSeqId(db)
+        helper = createdHelper
+        return db
+    }
+
+    private fun queryNextSeqId(db: SupportSQLiteDatabase): Long =
+        db.query("SELECT MAX($COLUMN_SEQ_ID) FROM $TABLE_MUTATIONS").use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) {
                 cursor.getLong(0) + 1L
             } else {
                 1L
             }
         }
-    }
-
-    private fun ensureOpen() {
-        check(database.isOpen && !closed.get()) { "AndroidWalJournal is closed" }
-    }
 
     private class JournalOpenCallback : SupportSQLiteOpenHelper.Callback(SCHEMA_VERSION) {
         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -221,6 +257,9 @@ class AndroidWalJournal(
         const val TAG = "KinetixWalJournal"
         const val WAL_DIRECTORY = "wal"
         const val SCHEMA_VERSION = 1
+        const val DEFAULT_DB_NAME = "kinetix_wal.db"
+        const val PROJECT_DB_PREFIX = "kinetix_wal_"
+        const val PROJECT_HASH_CHARS = 16
         const val TABLE_MUTATIONS = "wal_mutations"
         const val TABLE_WAL_STATE = "wal_state"
         const val COLUMN_SEQ_ID = "seq_id"
@@ -241,5 +280,24 @@ class AndroidWalJournal(
         const val SEED_STATE_ROW =
             "INSERT OR IGNORE INTO $TABLE_WAL_STATE " +
                 "($COLUMN_ID, $COLUMN_LAST_APPLIED) VALUES (1, 0)"
+
+        val HEX_DIGITS = "0123456789abcdef".toCharArray()
+
+        fun databaseNameFor(projectId: String?): String {
+            if (projectId.isNullOrBlank()) return DEFAULT_DB_NAME
+            val digest =
+                MessageDigest
+                    .getInstance("SHA-256")
+                    .digest(projectId.toByteArray(Charsets.UTF_8))
+            val hash =
+                buildString(digest.size * 2) {
+                    for (byte in digest) {
+                        val value = byte.toInt() and 0xFF
+                        append(HEX_DIGITS[value ushr 4])
+                        append(HEX_DIGITS[value and 0x0F])
+                    }
+                }
+            return "$PROJECT_DB_PREFIX${hash.take(PROJECT_HASH_CHARS)}.db"
+        }
     }
 }

@@ -19,11 +19,24 @@ import com.kinetix3d.platform.CodecProbeSupport
 interface VideoCodecApiManager {
     fun queryCapabilities(mime: String): DecoderCapabilities
 
+    /**
+     * Creates a hardware decoder for [mime] at [width] × [height].
+     *
+     * When [sourceFormat] is supplied (the `MediaExtractor` track format) its
+     * codec-specific data (`csd-0`…`csd-2`) and colour/profile metadata are copied
+     * into the configuration: many hardware decoders fail `configure()` or drop
+     * the first GOP when SPS/PPS/VPS/AV1 sequence headers are missing.
+     *
+     * `KEY_ALLOW_FRAME_DROP = 0` is export-only: during preview scrubbing, frame
+     * drops are exactly what keeps playback responsive.
+     */
     fun createOptimalDecoder(
         mime: String,
         width: Int,
         height: Int,
         surface: Surface,
+        sourceFormat: MediaFormat? = null,
+        isExport: Boolean = false,
     ): Result<MediaCodec>
 }
 
@@ -149,6 +162,8 @@ class AndroidVideoCodecApiManager : VideoCodecApiManager {
         width: Int,
         height: Int,
         surface: Surface,
+        sourceFormat: MediaFormat?,
+        isExport: Boolean,
     ): Result<MediaCodec> {
         if (mime.isBlank() || width <= 0 || height <= 0) {
             return Result.failure(DecoderError.UnsupportedCodec(mime))
@@ -183,8 +198,10 @@ class AndroidVideoCodecApiManager : VideoCodecApiManager {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && supportsLowLatency(capabilities)) {
                         setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
                     }
-                    // Export-friendly default: never silently drop frames mid-render.
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    sourceFormat?.let { source -> copyCodecConfiguration(source, this) }
+                    // Export-friendly only: preview decoders keep frame dropping
+                    // enabled so fast timeline scrubbing stays responsive.
+                    if (isExport && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 0)
                     }
                 }
@@ -234,10 +251,47 @@ class AndroidVideoCodecApiManager : VideoCodecApiManager {
             false
         }
 
+    /**
+     * Copies the codec-specific and colour keys a hardware decoder needs at
+     * `configure()` time. `MediaFormat` does not copy byte buffers, so each CSD
+     * buffer is duplicated to keep the extractor's buffer position untouched.
+     */
+    private fun copyCodecConfiguration(
+        source: MediaFormat,
+        target: MediaFormat,
+    ) {
+        for (key in BYTE_BUFFER_KEYS) {
+            val buffer = runCatching { source.getByteBuffer(key) }.getOrNull() ?: continue
+            runCatching { target.setByteBuffer(key, buffer.duplicate()) }
+        }
+        for (key in INTEGER_KEYS) {
+            source.intOrNull(key)?.let { value ->
+                runCatching { target.setInteger(key, value) }
+            }
+        }
+    }
+
     private companion object {
         const val VENDOR_INVALID_ARGUMENT = -1
         const val VENDOR_INVALID_STATE = -2
         const val MIN_IMPORT_FPS = 24.0
+
+        const val CSD_0 = "csd-0"
+        const val CSD_1 = "csd-1"
+        const val CSD_2 = "csd-2"
+
+        val BYTE_BUFFER_KEYS = listOf(CSD_0, CSD_1, CSD_2, MediaFormat.KEY_HDR_STATIC_INFO)
+        val INTEGER_KEYS =
+            listOf(
+                MediaFormat.KEY_PROFILE,
+                MediaFormat.KEY_LEVEL,
+                MediaFormat.KEY_COLOR_STANDARD,
+                MediaFormat.KEY_COLOR_TRANSFER,
+                MediaFormat.KEY_COLOR_RANGE,
+                MediaFormat.KEY_MAX_INPUT_SIZE,
+                MediaFormat.KEY_ROTATION,
+            )
+
         val EMPTY_CAPABILITIES =
             DecoderCapabilities(
                 hardwareAccelerated = false,

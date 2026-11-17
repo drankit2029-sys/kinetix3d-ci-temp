@@ -7,7 +7,7 @@
 package com.kinetix3d.platform.api
 
 import android.os.Build
-import com.kinetix3d.platform.OffscreenGlesContext
+import com.kinetix3d.model.DeviceCapabilityProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -24,7 +24,16 @@ enum class PreferredNpuBackend {
     XNNPACK_CPU,
 }
 
-class AndroidNpuAiInferenceApiManager : NpuAiInferenceApiManager {
+/**
+ * Backend selection never creates an EGL context. `EGL_DEFAULT_DISPLAY` is the
+ * process-wide singleton owned by Compose / the Phase 2 RenderThread, and a
+ * probe-time `eglTerminate` (the old `gpuRendererSuggestsOpenCl()` path) crashes
+ * active rendering threads on Exynos devices. The cached `GL_RENDERER` captured
+ * by the first-boot profiler is the only GPU string consulted here.
+ */
+class AndroidNpuAiInferenceApiManager(
+    private val profile: DeviceCapabilityProfile? = null,
+) : NpuAiInferenceApiManager {
     override suspend fun selectPreferredBackend(): PreferredNpuBackend =
         withContext(Dispatchers.IO) {
             val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
@@ -48,17 +57,38 @@ class AndroidNpuAiInferenceApiManager : NpuAiInferenceApiManager {
 
             when {
                 // Google Tensor (gs101 / gs201 / zuma …) ships its own TPU.
-                TENSOR_HINTS.any(fingerprint::contains) -> PreferredNpuBackend.TENSOR_TPU
+                TENSOR_HINTS.any(fingerprint::contains) -> {
+                    PreferredNpuBackend.TENSOR_TPU
+                }
 
                 // Qualcomm Hexagon HTP via the QNN delegate.
-                QUALCOMM_HINTS.any(fingerprint::contains) -> PreferredNpuBackend.QNN_HTP
+                QUALCOMM_HINTS.any(fingerprint::contains) -> {
+                    PreferredNpuBackend.QNN_HTP
+                }
 
                 // MediaTek APUs are exposed through NeuroPilot.
-                hasMediatekApu(fingerprint) -> PreferredNpuBackend.NEUROPILOT
+                hasMediatekApu(fingerprint) -> {
+                    PreferredNpuBackend.NEUROPILOT
+                }
 
-                gpuRendererSuggestsOpenCl() -> PreferredNpuBackend.OPENCL_GPU
+                // Samsung Exynos 1380 / s5e8835 (Galaxy M36 5G) and friends:
+                // prefer the OpenCL GPU delegate when the cached renderer is a
+                // known Mali/Xclipse part, otherwise stay on XNNPACK.
+                EXYNOS_HINTS.any(fingerprint::contains) -> {
+                    if (gpuRendererSuggestsOpenCl()) {
+                        PreferredNpuBackend.OPENCL_GPU
+                    } else {
+                        PreferredNpuBackend.XNNPACK_CPU
+                    }
+                }
 
-                else -> PreferredNpuBackend.XNNPACK_CPU
+                gpuRendererSuggestsOpenCl() -> {
+                    PreferredNpuBackend.OPENCL_GPU
+                }
+
+                else -> {
+                    PreferredNpuBackend.XNNPACK_CPU
+                }
             }
         }
 
@@ -70,18 +100,8 @@ class AndroidNpuAiInferenceApiManager : NpuAiInferenceApiManager {
     }
 
     private fun gpuRendererSuggestsOpenCl(): Boolean {
-        val context =
-            try {
-                OffscreenGlesContext.create()
-            } catch (throwable: Throwable) {
-                null
-            } ?: return false
-        return try {
-            val renderer = context.renderer?.lowercase(Locale.ROOT) ?: return false
-            OPENCL_RENDERER_HINTS.any(renderer::contains)
-        } finally {
-            context.close()
-        }
+        val renderer = profile?.glRenderer?.lowercase(Locale.ROOT) ?: return false
+        return OPENCL_RENDERER_HINTS.any(renderer::contains)
     }
 
     private companion object {
@@ -98,6 +118,7 @@ class AndroidNpuAiInferenceApiManager : NpuAiInferenceApiManager {
                 "sm8",
             )
         val MEDIATEK_HINTS = listOf("mediatek", "dimensity", "helio")
+        val EXYNOS_HINTS = listOf("exynos", "s5e")
         val OPENCL_RENDERER_HINTS = listOf("adreno", "mali", "powervr", "xclipse", "immortalis")
         val MT_APU_SOC = Regex("""mt[68]\d{3}""")
     }

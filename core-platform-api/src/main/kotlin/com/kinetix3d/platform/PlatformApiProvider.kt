@@ -53,7 +53,7 @@ object PlatformApiProvider {
             storageAndExport = AndroidStorageAndExportApiManager(appContext),
             hapticsAndInput = AndroidHapticsAndInputApiManager(appContext),
             thermalAndMemory = AndroidThermalAndMemoryApiManager(appContext),
-            npuAiInference = AndroidNpuAiInferenceApiManager(),
+            npuAiInference = AndroidNpuAiInferenceApiManager(profile),
         )
     }
 

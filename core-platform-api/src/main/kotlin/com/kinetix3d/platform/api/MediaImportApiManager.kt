@@ -52,8 +52,10 @@ data class ImportedAssetHandle(
 /**
  * SAF-backed import manager.
  *
- * The fingerprint hashes the first, middle and last window (64 KiB each) through
- * [Os.pread], which reads at an explicit offset and never advances the shared
+ * The fingerprint is `SHA-256(size_le/be + windows)`: the 8-byte file size is fed
+ * first, then the first, middle and last window (64 KiB each) through [Os.pread].
+ * Files ≤ 192 KiB are hashed in one whole-file pass so windows never overlap.
+ * [Os.pread] reads at an explicit offset and never advances the shared
  * open-file-description position. `ParcelFileDescriptor.dup()` must not be used:
  * POSIX `dup()` shares `f_pos`, so a concurrent MediaExtractor reader would corrupt
  * this stream (and vice versa). This is a re-encode/cache heuristic, not a
@@ -78,26 +80,53 @@ class AndroidMediaImportApiManager(
         size: Long,
     ): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        // Spec: [FileByteSize (8 bytes) + First 64 KiB + Middle 64 KiB + Last 64 KiB].
+        // The size prefix distinguishes different files whose sampled windows match.
+        digest.update(
+            ByteBuffer.allocate(Long.SIZE_BYTES).putLong(size).array(),
+        )
         if (size <= 0L) return digest.digest().toHexString()
-        val window = minOf(FINGERPRINT_WINDOW_BYTES.toLong(), size).toInt()
+
+        // Small files are hashed whole in one pass. Three independent 64 KiB
+        // windows would otherwise overlap for anything ≤ 192 KiB.
+        if (size <= SINGLE_PASS_LIMIT_BYTES) {
+            val length = size.toInt()
+            val buffer = ByteBuffer.allocate(length)
+            val read = readFully(fd, buffer, 0L, length)
+            if (read > 0) digest.update(buffer.array(), 0, read)
+            return digest.digest().toHexString()
+        }
+
+        val window = FINGERPRINT_WINDOW_BYTES
         val offsets = longArrayOf(0L, (size - window) / 2L, size - window).distinct()
         val buffer = ByteBuffer.allocate(window)
         for (offset in offsets) {
             buffer.clear()
-            var total = 0
-            while (total < window) {
-                val read =
-                    try {
-                        Os.pread(fd, buffer, offset + total)
-                    } catch (e: ErrnoException) {
-                        throw IOException("Positioned read failed at offset ${offset + total}", e)
-                    }
-                if (read <= 0) break
-                total += read
-            }
-            digest.update(buffer.array(), 0, total)
+            val read = readFully(fd, buffer, offset, window)
+            digest.update(buffer.array(), 0, read)
         }
         return digest.digest().toHexString()
+    }
+
+    /** Positioned reads until [length] bytes or EOF; returns the bytes read. */
+    private fun readFully(
+        fd: FileDescriptor,
+        buffer: ByteBuffer,
+        offset: Long,
+        length: Int,
+    ): Int {
+        var total = 0
+        while (total < length) {
+            val read =
+                try {
+                    Os.pread(fd, buffer, offset + total)
+                } catch (e: ErrnoException) {
+                    throw IOException("Positioned read failed at offset ${offset + total}", e)
+                }
+            if (read <= 0) break
+            total += read
+        }
+        return total
     }
 
     /**
@@ -153,6 +182,7 @@ class AndroidMediaImportApiManager(
 
     private companion object {
         const val FINGERPRINT_WINDOW_BYTES = 64 * 1024
+        const val SINGLE_PASS_LIMIT_BYTES = 3L * FINGERPRINT_WINDOW_BYTES
         const val DEFAULT_MIME_TYPE = "application/octet-stream"
         const val UNKNOWN_SIZE = -1L
         val HEX_DIGITS = "0123456789abcdef".toCharArray()

@@ -32,7 +32,9 @@ internal class OffscreenGlesContext private constructor(
         EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
         EGL14.eglDestroySurface(display, surface)
         EGL14.eglDestroyContext(display, eglContext)
-        EGL14.eglTerminate(display)
+        // Never call eglTerminate(display): EGL_DEFAULT_DISPLAY is the process-wide
+        // singleton shared with Compose's hardware renderer and the Phase 2
+        // RenderThread. Terminating it would crash those threads with EGL_BAD_DISPLAY.
     }
 
     companion object {
@@ -103,7 +105,8 @@ internal class OffscreenGlesContext private constructor(
                 if (!success) {
                     createdSurface?.let { pending -> EGL14.eglDestroySurface(display, pending) }
                     createdContext?.let { pending -> EGL14.eglDestroyContext(display, pending) }
-                    EGL14.eglTerminate(display)
+                    // Do NOT eglTerminate here either: the display may already be
+                    // in use by Compose/Phase 2 on this process.
                 }
             }
         }

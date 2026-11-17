@@ -12,11 +12,13 @@ package com.kinetix3d.platform
 
 import android.app.ActivityManager
 import android.content.Context
+import android.graphics.SurfaceTexture
 import android.hardware.HardwareBuffer
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.Build
 import android.util.Log
+import android.view.Surface
 import androidx.annotation.RequiresApi
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.HardwareTier
@@ -33,6 +35,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class HardwareCapabilityProfiler(
     private val context: Context,
@@ -117,14 +121,14 @@ class HardwareCapabilityProfiler(
         }
 
         var approximate = false
-        val codecMatrix =
+        val codecProbe =
             try {
                 probeCodecMatrix()
             } catch (throwable: Throwable) {
                 Log.w(TAG, "Stage 2 (codec-matrix) probe failed", throwable)
-                emptyMap()
+                CodecMatrixProbeResult(emptyMap(), emptyMap())
             }
-        if (codecMatrix.isEmpty()) approximate = true
+        if (codecProbe.decode.isEmpty() && codecProbe.encode.isEmpty()) approximate = true
 
         val gles = probeGles()
         if (gles.approximate) approximate = true
@@ -152,20 +156,25 @@ class HardwareCapabilityProfiler(
                 "lowRam=${memory.lowRam} gl=${gles.renderer.orEmpty()}",
         )
 
-        val safeVramBudgetMb =
-            if (memory.lowRam) {
-                LOW_RAM_VRAM_BUDGET_MB
-            } else {
-                minOf(MAX_VRAM_BUDGET_MB, memory.totalMemMb / 6).coerceAtLeast(MIN_VRAM_BUDGET_MB)
-            }
+        // Tier thresholds follow Blueprint §1.1 / Refined Features §2.1:
+        // TIER_1 = flagship (>=8GB, >=6 decoders, RGBA16F), TIER_3 = low-RAM
+        // (<4GB or isLowRamDevice), everything else is TIER_2. A failed memory
+        // probe (totalMemMb == 0) deliberately stays TIER_2, never TIER_1.
         val tier =
             when {
-                memory.totalMemMb < TIER1_MAX_MEMORY_MB || memory.lowRam -> HardwareTier.TIER_1
+                memory.lowRam || (memory.totalMemMb in 1 until TIER3_MAX_MEMORY_MB) -> HardwareTier.TIER_3
 
-                memory.totalMemMb >= TIER3_MIN_MEMORY_MB &&
-                    maxDecoders >= TIER3_MIN_DECODERS -> HardwareTier.TIER_3
+                memory.totalMemMb >= TIER1_MIN_MEMORY_MB &&
+                    maxDecoders >= TIER1_MIN_DECODERS &&
+                    gles.supportsRgba16f -> HardwareTier.TIER_1
 
                 else -> HardwareTier.TIER_2
+            }
+        val safeVramBudgetMb =
+            when (tier) {
+                HardwareTier.TIER_1 -> DeviceCapabilityProfile.TIER1_VRAM_BUDGET_MB
+                HardwareTier.TIER_2 -> DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB
+                HardwareTier.TIER_3 -> DeviceCapabilityProfile.TIER3_VRAM_BUDGET_MB
             }
         val profile =
             DeviceCapabilityProfile(
@@ -175,14 +184,20 @@ class HardwareCapabilityProfiler(
                 supportsAhbZeroCopy = supportsAhb,
                 maxTextureSize = gles.maxTextureSize,
                 safeVramBudgetMb = safeVramBudgetMb,
-                codecMatrix = codecMatrix,
+                decodeMatrix = codecProbe.decode,
+                encodeMatrix = codecProbe.encode,
                 approximate = approximate,
+                glRenderer = gles.renderer,
             )
         return ProbeResult(profile, gles.renderer, gles.version)
     }
 
     // ---------------------------------------------------------------------
     // Stage 1 — simultaneous 720p H.264 hardware decoders (cap 16)
+    //
+    // Each probe is bound to its own *detached* SurfaceTexture + Surface:
+    // Surface-backed decoders allocate from the Gralloc/AHardwareBuffer producer
+    // pool, whose concurrent-instance ceiling differs from ByteBuffer mode.
     // ---------------------------------------------------------------------
 
     private fun probeMaxHwDecoders(): Int {
@@ -190,7 +205,7 @@ class HardwareCapabilityProfiler(
             CodecProbeSupport.findHardwareCodec(CodecProbeSupport.MIME_H264, encoder = false)
                 ?: return 0
         val format = MediaFormat.createVideoFormat(CodecProbeSupport.MIME_H264, PROBE_WIDTH, PROBE_HEIGHT)
-        val liveDecoders = ArrayList<MediaCodec>(MAX_HW_DECODERS)
+        val liveDecoders = ArrayList<DecoderProbe>(MAX_HW_DECODERS)
         try {
             while (liveDecoders.size < MAX_HW_DECODERS) {
                 val decoder = allocateDecoderWithTimeout(codec.name, format) ?: break
@@ -199,37 +214,64 @@ class HardwareCapabilityProfiler(
             return liveDecoders.size
         } finally {
             for (decoder in liveDecoders) {
-                runCatching { decoder.stop() }
-                runCatching { decoder.release() }
+                decoder.release()
             }
         }
     }
 
+    /**
+     * Allocates one surface-backed decoder with a hard timeout.
+     *
+     * `Future.cancel(true)` cannot abort an in-flight vendor binder call inside
+     * `configure()` / `start()`. The worker therefore publishes its probe into
+     * [lateProbe]; when the timeout wins, [cancelled] makes the late worker release
+     * immediately, and the caller sweeps anything published in the race window.
+     * A leaked hardware decoder slot would permanently reduce the pool ceiling.
+     */
     private fun allocateDecoderWithTimeout(
         codecName: String,
         format: MediaFormat,
-    ): MediaCodec? {
+    ): DecoderProbe? {
         val executor =
             Executors.newSingleThreadExecutor { runnable ->
                 Thread(runnable, "$PROBE_THREAD_NAME-decoder").apply { isDaemon = true }
             }
-        var future: Future<MediaCodec>? = null
+        val cancelled = AtomicBoolean(false)
+        val lateProbe = AtomicReference<DecoderProbe?>(null)
+        var future: Future<DecoderProbe>? = null
         try {
             future =
-                executor.submit<MediaCodec> {
+                executor.submit<DecoderProbe> {
                     val codec = MediaCodec.createByCodecName(codecName)
+                    val surfaceTexture = SurfaceTexture(false)
+                    val surface = Surface(surfaceTexture)
+                    val probe = DecoderProbe(codec, surfaceTexture, surface)
+                    var published = false
                     try {
-                        codec.configure(format, null, null, 0)
+                        codec.configure(format, surface, null, 0)
                         codec.start()
-                        codec
+                        lateProbe.set(probe)
+                        published = true
+                        if (cancelled.get()) {
+                            if (lateProbe.compareAndSet(probe, null)) probe.release()
+                            throw CancellationException("Decoder probe timed out")
+                        }
+                        probe
                     } catch (throwable: Throwable) {
-                        runCatching { codec.release() }
+                        // Before publication the worker owns the probe outright;
+                        // after publication either this worker or the caller's
+                        // timeout sweep released it exactly once.
+                        if (!published) probe.release()
                         throw throwable
                     }
                 }
-            return future.get(DECODER_ALLOCATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            val allocated = future.get(DECODER_ALLOCATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            lateProbe.compareAndSet(allocated, null)
+            return allocated
         } catch (error: TimeoutException) {
+            cancelled.set(true)
             future?.cancel(true)
+            lateProbe.getAndSet(null)?.release()
             Log.d(TAG, "Decoder allocation timed out after ${DECODER_ALLOCATION_TIMEOUT_MS}ms", error)
             return null
         } catch (error: ExecutionException) {
@@ -242,26 +284,46 @@ class HardwareCapabilityProfiler(
             return null
         } catch (error: InterruptedException) {
             Thread.currentThread().interrupt()
+            cancelled.set(true)
             future?.cancel(true)
+            lateProbe.getAndSet(null)?.release()
             return null
         } finally {
             executor.shutdownNow()
         }
     }
 
+    private class DecoderProbe(
+        private val decoder: MediaCodec,
+        private val surfaceTexture: SurfaceTexture,
+        private val surface: Surface,
+    ) {
+        fun release() {
+            runCatching { decoder.stop() }
+            runCatching { decoder.release() }
+            runCatching { surface.release() }
+            runCatching { surfaceTexture.release() }
+        }
+    }
+
     // ---------------------------------------------------------------------
-    // Stage 2 — hardware decode/encode matrix for H.264, HEVC, VP9 and AV1
+    // Stage 2 — hardware decode and encode matrices for H.264, HEVC, VP9 and AV1
+    //
+    // Decode and encode stay separate: most mid-range SoCs decode AV1/VP9 but
+    // have no hardware encoder for them, and a 4K60 decoder may only encode
+    // 4K30. Conflating the ceilings makes the exporter claim unsupported
+    // hardware encoding and under-reports the decoder pool ceiling.
     // ---------------------------------------------------------------------
 
-    private fun probeCodecMatrix(): Map<VideoMime, MaxResFps> {
-        val matrix = LinkedHashMap<VideoMime, MaxResFps>()
+    private fun probeCodecMatrix(): CodecMatrixProbeResult {
+        val decode = LinkedHashMap<VideoMime, MaxResFps>()
+        val encode = LinkedHashMap<VideoMime, MaxResFps>()
         for (videoMime in VideoMime.entries) {
             val mime = CodecProbeSupport.mimeFor(videoMime)
-            val decode = bestSupported(mime, encoder = false) ?: continue
-            val encode = bestSupported(mime, encoder = true)
-            matrix[videoMime] = if (encode == null) decode else intersect(decode, encode)
+            bestSupported(mime, encoder = false)?.let { decode[videoMime] = it }
+            bestSupported(mime, encoder = true)?.let { encode[videoMime] = it }
         }
-        return matrix
+        return CodecMatrixProbeResult(decode = decode, encode = encode)
     }
 
     private fun bestSupported(
@@ -288,15 +350,10 @@ class HardwareCapabilityProfiler(
         return null
     }
 
-    private fun intersect(
-        decode: MaxResFps,
-        encode: MaxResFps,
-    ): MaxResFps =
-        MaxResFps(
-            width = minOf(decode.width, encode.width),
-            height = minOf(decode.height, encode.height),
-            fps = minOf(decode.fps, encode.fps),
-        )
+    private data class CodecMatrixProbeResult(
+        val decode: Map<VideoMime, MaxResFps>,
+        val encode: Map<VideoMime, MaxResFps>,
+    )
 
     // ---------------------------------------------------------------------
     // Stage 3 — offscreen EGL + GLES extension probe
@@ -466,7 +523,7 @@ class HardwareCapabilityProfiler(
         const val PROBE_THREAD_NAME = "kinetix-hw-probe"
         const val PROFILE_FILE_NAME = "device_profile.pb"
         const val SIDECAR_FILE_NAME = "device_profile.key"
-        const val CACHE_SCHEMA_VERSION = 1
+        const val CACHE_SCHEMA_VERSION = 2
         const val KEY_SCHEMA = "schema"
         const val KEY_DEVICE = "deviceKey"
         const val KEY_GL_DEVICE = "glKey"
@@ -485,12 +542,9 @@ class HardwareCapabilityProfiler(
         const val CANDIDATE_RATE_FPS = 30.0
         const val AHB_PROBE_SIZE = 4
 
-        const val LOW_RAM_VRAM_BUDGET_MB = 128
-        const val MIN_VRAM_BUDGET_MB = 128
-        const val MAX_VRAM_BUDGET_MB = 512
-        const val TIER1_MAX_MEMORY_MB = 3 * 1024
-        const val TIER3_MIN_MEMORY_MB = 8 * 1024
-        const val TIER3_MIN_DECODERS = 6
+        const val TIER1_MIN_MEMORY_MB = 8 * 1024
+        const val TIER1_MIN_DECODERS = 6
+        const val TIER3_MAX_MEMORY_MB = 4 * 1024
 
         val CANDIDATE_RESOLUTIONS =
             listOf(

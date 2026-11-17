@@ -74,20 +74,48 @@ class AndroidStorageAndExportApiManager(
             }
         }
 
+    private enum class ExportKind(
+        val legacyDirectory: String,
+    ) {
+        VIDEO(Environment.DIRECTORY_MOVIES),
+        IMAGE(Environment.DIRECTORY_PICTURES),
+        AUDIO(Environment.DIRECTORY_MUSIC),
+    }
+
+    private fun exportKindFor(mimeType: String): ExportKind =
+        when {
+            mimeType.startsWith("video/", ignoreCase = true) -> ExportKind.VIDEO
+            mimeType.startsWith("image/", ignoreCase = true) -> ExportKind.IMAGE
+            mimeType.startsWith("audio/", ignoreCase = true) -> ExportKind.AUDIO
+            else -> throw IllegalArgumentException("Unsupported export MIME type '$mimeType'")
+        }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun collectionFor(kind: ExportKind): Uri =
+        when (kind) {
+            ExportKind.VIDEO -> MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            ExportKind.IMAGE -> MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            ExportKind.AUDIO -> MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun publishViaMediaStore(
         tempFile: File,
         displayName: String,
         mimeType: String,
     ): Uri {
+        val kind = exportKindFor(mimeType)
         val values =
             ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                 put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$EXPORT_DIRECTORY")
+                put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    "${kind.legacyDirectory}/$EXPORT_DIRECTORY",
+                )
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
-        val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val collection = collectionFor(kind)
         val uri =
             resolver.insert(collection, values)
                 ?: throw IOException("MediaStore refused to create $displayName")
@@ -118,8 +146,9 @@ class AndroidStorageAndExportApiManager(
         ) {
             throw SecurityException("WRITE_EXTERNAL_STORAGE is required to export on API 26-28")
         }
-        val movies = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-        val directory = File(movies, EXPORT_DIRECTORY)
+        val kind = exportKindFor(mimeType)
+        val root = Environment.getExternalStoragePublicDirectory(kind.legacyDirectory)
+        val directory = File(root, EXPORT_DIRECTORY)
         if (!directory.exists() && !directory.mkdirs()) {
             throw IOException("Unable to create ${directory.absolutePath}")
         }
