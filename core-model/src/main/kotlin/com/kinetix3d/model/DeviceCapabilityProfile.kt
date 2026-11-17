@@ -60,6 +60,16 @@ object CodecMatrixSerializer : KSerializer<Map<VideoMime, MaxResFps>> {
  * Serializable hardware profile. Produced once on first boot (or on
  * Settings → Re-evaluate Device Hardware) and passed to every strategy manager;
  * managers never re-probe.
+ *
+ * [decodeMatrix] and [encodeMatrix] are deliberately separate: most mid-range
+ * SoCs decode AV1/VP9 but have no hardware encoder for them, and a chip that
+ * decodes 4K60 may only encode 4K30. Conflating the two ceilings makes the
+ * exporter claim unsupported hardware encoding and under-reports the decoder
+ * pool ceiling.
+ *
+ * [safeVramBudgetMb] is the tile-bucket threshold from the spec: 18 MB on
+ * Tier 3, 24 MB on Tier 2, 32 MB on Tier 1. A single render pass above the
+ * budget is sliced into `512x512` tiles instead of allocating a full FBO.
  */
 @Serializable
 data class DeviceCapabilityProfile(
@@ -70,7 +80,11 @@ data class DeviceCapabilityProfile(
     val maxTextureSize: Int,
     val safeVramBudgetMb: Int,
     @Serializable(with = CodecMatrixSerializer::class)
-    val codecMatrix: Map<VideoMime, MaxResFps>,
+    val decodeMatrix: Map<VideoMime, MaxResFps>,
+    @Serializable(with = CodecMatrixSerializer::class)
+    val encodeMatrix: Map<VideoMime, MaxResFps> = emptyMap(),
+    /** `GL_RENDERER` captured by the Stage-3 probe; consumers must never re-create EGL to read it. */
+    val glRenderer: String? = null,
     val approximate: Boolean = false,
 ) {
     companion object {
@@ -82,15 +96,25 @@ data class DeviceCapabilityProfile(
                 supportsRgba16f = false,
                 supportsAhbZeroCopy = false,
                 maxTextureSize = 4096,
-                safeVramBudgetMb = 192,
-                codecMatrix =
+                safeVramBudgetMb = TIER2_VRAM_BUDGET_MB,
+                decodeMatrix =
                     mapOf(
                         VideoMime.H264 to MaxResFps(1920, 1080, 60.0),
                         VideoMime.HEVC to MaxResFps(1920, 1080, 30.0),
                         VideoMime.VP9 to MaxResFps(1920, 1080, 30.0),
                         VideoMime.AV1 to MaxResFps(1280, 720, 30.0),
                     ),
+                encodeMatrix =
+                    mapOf(
+                        VideoMime.H264 to MaxResFps(1920, 1080, 30.0),
+                        VideoMime.HEVC to MaxResFps(1920, 1080, 30.0),
+                    ),
                 approximate = approximate,
             )
+
+        /** Tile-bucket VRAM thresholds from the Refined Features tier table. */
+        const val TIER1_VRAM_BUDGET_MB: Int = 32
+        const val TIER2_VRAM_BUDGET_MB: Int = 24
+        const val TIER3_VRAM_BUDGET_MB: Int = 18
     }
 }

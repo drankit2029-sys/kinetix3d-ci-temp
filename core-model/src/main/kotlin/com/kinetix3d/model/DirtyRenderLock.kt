@@ -42,6 +42,15 @@ class DirtyRenderLock(
 
     private val lockFile = File(directory, FILE_NAME)
 
+    /**
+     * Diagnostic mode for the single breadcrumb frame written after Safe Recovery
+     * detected a crash. Normal 120 Hz frames never msync: the kernel flushes
+     * dirty MAP_SHARED pages on process death, and a synchronous `force()` per
+     * frame stalls RenderThread for 1–8 ms.
+     */
+    @Volatile
+    var synchronousBreadcrumbMode: Boolean = false
+
     @Volatile
     private var access: RandomAccessFile? = null
 
@@ -99,7 +108,9 @@ class DirtyRenderLock(
         for (offset in OFFSET_PAYLOAD until RECORD_BYTES) {
             buffer.put(offset, 0)
         }
-        buffer.force()
+        if (synchronousBreadcrumbMode) {
+            buffer.force()
+        }
     }
 
     private fun open(): MappedByteBuffer {
@@ -139,6 +150,8 @@ class DirtyRenderLock(
     }
 
     companion object {
+        /** Directory (under `Context.filesDir`) shared by the Application guard check and RenderThread. */
+        const val DIRECTORY_NAME = "render_guard"
         const val FILE_NAME = "render_guard.lock"
         const val RECORD_BYTES = 64
         const val MAGIC = 0x4B33444C // 'K3DL'

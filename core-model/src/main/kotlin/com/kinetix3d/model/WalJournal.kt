@@ -128,9 +128,15 @@ class InMemoryWalJournal(
     override suspend fun checkpoint(keepLast: Int): Unit =
         mutex.withLock {
             require(keepLast >= 0) { "keepLast must be non-negative" }
-            if (records.size > keepLast) {
-                records.subList(0, records.size - keepLast).clear()
-            }
+            // Bound retention without ever discarding unapplied work: the newest
+            // keepLast rows always survive, older rows only once they were replayed.
+            val keepFrom = maxOf(0, records.size - keepLast)
+            val retained =
+                records.filterIndexed { index, (seq, _) ->
+                    index >= keepFrom || seq > appliedSeq
+                }
+            records.clear()
+            records.addAll(retained)
         }
 
     override suspend fun lastAppliedSeq(): Long = mutex.withLock { appliedSeq }

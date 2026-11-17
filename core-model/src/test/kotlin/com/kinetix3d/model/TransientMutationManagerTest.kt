@@ -56,6 +56,30 @@ class TransientMutationManagerTest {
     }
 
     @Test
+    fun `batch overrides publish as one atomic snapshot`() {
+        val manager = TransientMutationManager()
+        manager.set(key, 1f)
+        val before = manager.snapshot()
+
+        manager.setBatch(
+            mapOf(
+                OverrideKey("clip/1", "transform.anchor.x") to 10f,
+                OverrideKey("clip/1", "transform.anchor.y") to 20f,
+                OverrideKey("clip/1", "transform.anchor.z") to 30f,
+                key to 2f,
+            ),
+        )
+
+        val after = manager.snapshot()
+        assertEquals(1f, before[key])
+        assertEquals(2f, after[key])
+        assertEquals(
+            listOf(10f, 20f, 30f),
+            listOf("x", "y", "z").map { after[OverrideKey("clip/1", "transform.anchor.$it")] },
+        )
+    }
+
+    @Test
     fun `clearAll drops every transient override`() {
         val manager = TransientMutationManager()
         manager.set(key, 1f)

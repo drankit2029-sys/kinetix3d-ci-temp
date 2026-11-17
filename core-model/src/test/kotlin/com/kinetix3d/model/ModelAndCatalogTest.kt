@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.kinetix3d.model
 
 import kotlinx.collections.immutable.persistentListOf
@@ -59,9 +61,82 @@ class OperatorCatalogTest {
             KinetixOperatorCatalog.colorSuite.tiling,
         )
         assertEquals(
-            TilingCapability.LocalNeighborhood(128),
+            TilingCapability.LocalNeighborhood(0.5f),
             KinetixOperatorCatalog.blur.tiling,
         )
+    }
+
+    @Test
+    fun `spatial parameters are normalized to composition height`() {
+        val floats = KinetixOperatorCatalog.all.flatMap { it.params }.filterIsInstance<ParamSpec.FloatParam>()
+        val spatial = floats.filter { it.unit == UnitType.COMP_HEIGHT_NORM }
+        assertTrue(spatial.isNotEmpty(), "the catalog must author spatial params in comp-height units")
+        spatial.forEach { param ->
+            assertTrue(param.default in 0f..1f, "${param.key} default must be a comp-height fraction")
+            assertTrue(param.max <= 1f, "${param.key} max must be a comp-height fraction")
+        }
+        assertEquals(
+            UnitType.COMP_HEIGHT_NORM,
+            KinetixOperatorCatalog.blur.params
+                .filterIsInstance<ParamSpec.FloatParam>()
+                .first { it.key == "radius" }
+                .unit,
+        )
+    }
+
+    @Test
+    fun `blur glow and warp expose their full mode catalogs`() {
+        val blurModes =
+            KinetixOperatorCatalog.blur.modes
+                .map { it.modeId }
+                .toSet()
+        assertTrue(
+            blurModes.containsAll(
+                setOf("box", "directional_motion", "radial_zoom", "radial_spin", "surface_bilateral"),
+            ),
+        )
+        assertEquals(TilingCapability.GlobalSpatialBarrier, KinetixOperatorCatalog.blur.tilingFor("radial_zoom"))
+        assertEquals(TilingCapability.GlobalSpatialBarrier, KinetixOperatorCatalog.blur.tilingFor("radial_spin"))
+        assertEquals(KinetixOperatorCatalog.blur.tiling, KinetixOperatorCatalog.blur.tilingFor("gaussian"))
+        assertEquals("gaussian", KinetixOperatorCatalog.blur.mode()?.modeId)
+
+        val glowModes =
+            KinetixOperatorCatalog.glow.modes
+                .map { it.modeId }
+                .toSet()
+        assertTrue(glowModes.containsAll(setOf("outer_edge", "inner", "anamorphic_streak", "film_halation")))
+
+        val warpModes =
+            KinetixOperatorCatalog.warp.modes
+                .map { it.modeId }
+                .toSet()
+        assertTrue(warpModes.containsAll(setOf("swirl", "bulge", "bezier_mesh", "liquify")))
+    }
+
+    @Test
+    fun `glitch modes carry per-mode tiling and stateful feedback`() {
+        val glitch = KinetixOperatorCatalog.glitch
+        assertTrue(
+            glitch.modes
+                .map { it.modeId }
+                .toSet()
+                .containsAll(setOf("datamosh", "pixel_sort", "vhs_crt", "wave_slice_tear")),
+        )
+        assertTrue(glitch.isStatefulFor("datamosh"))
+        assertTrue(!glitch.isStatefulFor("rgb_split"))
+        assertEquals(TilingCapability.GlobalSpatialBarrier, glitch.tilingFor("pixel_sort"))
+        assertEquals(TilingCapability.PointExact, glitch.tilingFor("rgb_split"))
+    }
+
+    @Test
+    fun `mode-aware search metadata is complete`() {
+        KinetixOperatorCatalog.coreV100.forEach { schema ->
+            assertTrue(schema.searchSynonyms.isNotEmpty(), "${schema.id} must expose search synonyms")
+            assertTrue(schema.modes.isNotEmpty(), "${schema.id} must declare modes")
+            schema.modes.forEach { mode ->
+                assertTrue(mode.visibleParams.isNotEmpty(), "${schema.id}/${mode.modeId} must declare visible params")
+            }
+        }
     }
 
     @Test
@@ -99,21 +174,25 @@ class OperatorCatalogTest {
 
 class DeviceCapabilityProfileTest {
     @Test
-    fun `profile survives a protobuf roundtrip including enum-keyed codec matrix`() {
+    fun `profile protobuf roundtrip preserves separate decode and encode ceilings`() {
         val profile =
             DeviceCapabilityProfile(
-                tier = HardwareTier.TIER_3,
+                tier = HardwareTier.TIER_2,
                 maxHwDecoders = 6,
-                supportsRgba16f = true,
-                supportsAhbZeroCopy = true,
+                supportsRgba16f = false,
+                supportsAhbZeroCopy = false,
                 maxTextureSize = 8192,
-                safeVramBudgetMb = 768,
-                codecMatrix =
+                safeVramBudgetMb = DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB,
+                decodeMatrix =
                     mapOf(
                         VideoMime.H264 to MaxResFps(3840, 2160, 60.0),
-                        VideoMime.HEVC to MaxResFps(3840, 2160, 60.0),
                         VideoMime.AV1 to MaxResFps(1920, 1080, 120.0),
                     ),
+                encodeMatrix =
+                    mapOf(
+                        VideoMime.H264 to MaxResFps(1920, 1080, 30.0),
+                    ),
+                glRenderer = "Mali-G68 MC4",
             )
 
         val decoded =
@@ -123,6 +202,11 @@ class DeviceCapabilityProfileTest {
             )
 
         assertEquals(profile, decoded)
+        assertEquals(3840, decoded.decodeMatrix.getValue(VideoMime.H264).width)
+        assertEquals(1920, decoded.encodeMatrix.getValue(VideoMime.H264).width)
+        assertTrue(VideoMime.AV1 in decoded.decodeMatrix)
+        assertTrue(VideoMime.AV1 !in decoded.encodeMatrix)
+        assertEquals("Mali-G68 MC4", decoded.glRenderer)
     }
 
     @Test
@@ -131,6 +215,15 @@ class DeviceCapabilityProfileTest {
         assertTrue(fallback.approximate)
         assertEquals(HardwareTier.TIER_2, fallback.tier)
         assertEquals(false, fallback.supportsAhbZeroCopy)
+        assertEquals(DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB, fallback.safeVramBudgetMb)
+        assertEquals(24, DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB)
+    }
+
+    @Test
+    fun `tile bucket vram budgets match the spec thresholds`() {
+        assertEquals(32, DeviceCapabilityProfile.TIER1_VRAM_BUDGET_MB)
+        assertEquals(24, DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB)
+        assertEquals(18, DeviceCapabilityProfile.TIER3_VRAM_BUDGET_MB)
     }
 }
 
@@ -231,6 +324,95 @@ class ProjectStateTest {
         }
     }
 
+    @Test
+    fun `project state survives a protobuf roundtrip with node params transitions and curves`() {
+        val ramp =
+            KeyframeCurve(
+                keyframes =
+                    listOf(
+                        Keyframe(0L, 1f),
+                        Keyframe(500_000L, 4f, Easing.CubicBezier()),
+                        Keyframe(1_000_000L, 0.2f),
+                        Keyframe(1_500_000L, 1f),
+                    ),
+                extrapolation = Extrapolation.LINEAR,
+            )
+        val graph =
+            NodeGraph.passthrough().let { base ->
+                base.copy(
+                    nodes =
+                        base.nodes.putting(
+                            "node-blur",
+                            GraphNode(
+                                nodeId = "node-blur",
+                                schemaId = "kinetix.blur",
+                                modeId = "radial_zoom",
+                                params =
+                                    persistentMapOf(
+                                        "radius" to ParamChannel.animated(ramp),
+                                        "angle" to ParamChannel.driven("wiggle(2, 45)"),
+                                    ),
+                                enabled = false,
+                                canvasPosition = Vec2(0.25f, -0.5f),
+                            ),
+                        ),
+                )
+            }
+        val composition =
+            CompositionGraph(
+                compositionId = "comp-main",
+                name = "Main",
+                settings = settings,
+                clips =
+                    persistentMapOf(
+                        "clip-a" to
+                            clip("clip-a", 0L, 2_000_000L).copy(
+                                timeRemap = TimeRemapSpec.VelocityBezierCurve(ramp),
+                                blendMode = BlendMode.LINEAR_DODGE,
+                                nodeGraph = graph,
+                                reversed = true,
+                            ),
+                        "clip-b" to clip("clip-b", 2_000_000L, 4_000_000L),
+                    ),
+                tracks = persistentListOf(TrackNode("v1", TrackType.VIDEO)),
+                transitions =
+                    persistentListOf(
+                        CutTransition(
+                            transitionId = "t1",
+                            outgoingClipId = "clip-a",
+                            incomingClipId = "clip-b",
+                            durationUs = 500_000L,
+                            handlePolicy = HandlePolicy.SYNTHESIZE_OPTICAL_FLOW,
+                            progressCurve = ramp,
+                        ),
+                    ),
+            )
+        val project =
+            ProjectState(
+                projectId = "p1",
+                settings = settings,
+                compositions = persistentMapOf("comp-main" to composition),
+                activeCompId = "comp-main",
+            )
+
+        val decoded =
+            ProtoBuf.decodeFromByteArray(
+                ProjectState.serializer(),
+                ProtoBuf.encodeToByteArray(ProjectState.serializer(), project),
+            )
+
+        assertEquals(project, decoded)
+        assertEquals(
+            graph.nodes.getValue("node-blur"),
+            decoded
+                .activeComposition()
+                .clips
+                .getValue("clip-a")
+                .nodeGraph.nodes
+                .getValue("node-blur"),
+        )
+    }
+
     private fun clip(
         id: String,
         startUs: Long,
@@ -244,4 +426,69 @@ class ProjectStateTest {
             sourceOutUs = endUs - startUs,
             nodeGraph = NodeGraph.passthrough(),
         )
+}
+
+class LayerAlgebraTest {
+    @Test
+    fun `blend mode exposes the 28 spec modes including the add alias`() {
+        val expected =
+            setOf(
+                "NORMAL",
+                "DISSOLVE",
+                "DARKEN",
+                "MULTIPLY",
+                "COLOR_BURN",
+                "LINEAR_BURN",
+                "DARKER_COLOR",
+                "LIGHTEN",
+                "SCREEN",
+                "COLOR_DODGE",
+                "LINEAR_DODGE",
+                "ADD",
+                "LIGHTER_COLOR",
+                "OVERLAY",
+                "SOFT_LIGHT",
+                "HARD_LIGHT",
+                "VIVID_LIGHT",
+                "LINEAR_LIGHT",
+                "PIN_LIGHT",
+                "HARD_MIX",
+                "DIFFERENCE",
+                "EXCLUSION",
+                "SUBTRACT",
+                "DIVIDE",
+                "HUE",
+                "SATURATION",
+                "COLOR",
+                "LUMINOSITY",
+            )
+        assertEquals(28, BlendMode.entries.size)
+        assertEquals(expected, BlendMode.entries.map { it.name }.toSet())
+        assertEquals(BlendMode.LINEAR_DODGE, BlendMode.ADD.canonical())
+        assertEquals(BlendMode.MULTIPLY, BlendMode.MULTIPLY.canonical())
+    }
+
+    @Test
+    fun `handle policies match the cut transition spec`() {
+        assertEquals(
+            listOf("OVERLAP_HANDLES", "RIPPLE_OVERLAP", "SYNTHESIZE_MIRROR_TILE", "SYNTHESIZE_OPTICAL_FLOW"),
+            HandlePolicy.entries.map { it.name },
+        )
+    }
+
+    @Test
+    fun `clips carry a first-class reverse flag while rates stay positive`() {
+        val clip =
+            ClipNode(
+                clipId = "clip-reverse",
+                trackId = "v1",
+                timelineInUs = 0L,
+                timelineOutUs = 1_000_000L,
+                reversed = true,
+            )
+
+        assertTrue(clip.reversed)
+        assertEquals(1f, (clip.timeRemap as TimeRemapSpec.ConstantRate).rate)
+        assertFailsWith<IllegalArgumentException> { TimeRemapSpec.ConstantRate(-2f) }
+    }
 }

@@ -7,6 +7,7 @@
 
 package com.kinetix3d.model
 
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.cos
@@ -14,6 +15,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** 2-component float vector (skew, UV coordinates, …). */
+@Serializable
 data class Vec2(
     val x: Float = 0f,
     val y: Float = 0f,
@@ -31,6 +33,15 @@ data class Vec2(
         return if (len > 1e-6f) Vec2(x / len, y / len) else ZERO
     }
 
+    fun lerp(
+        other: Vec2,
+        t: Float,
+    ): Vec2 =
+        Vec2(
+            x + (other.x - x) * t,
+            y + (other.y - y) * t,
+        )
+
     companion object {
         val ZERO = Vec2(0f, 0f)
         val ONE = Vec2(1f, 1f)
@@ -38,6 +49,7 @@ data class Vec2(
 }
 
 /** 3-component float vector (position, tangent, normal, scale, …). */
+@Serializable
 data class Vec3(
     val x: Float = 0f,
     val y: Float = 0f,
@@ -92,6 +104,7 @@ data class Vec3(
 }
 
 /** Unit-quaternion rotation (x, y, z, w). */
+@Serializable
 data class Quaternion(
     val x: Float = 0f,
     val y: Float = 0f,
@@ -142,18 +155,21 @@ data class Quaternion(
             to: Quaternion,
             t: Float,
         ): Quaternion {
+            // Normalize both ends: callers may pass a drifted (non-unit) `from`,
+            // which would otherwise skew the dot product and the sin-weighted sum.
+            val start = from.normalized()
             var target = to.normalized()
-            var dot = from.x * target.x + from.y * target.y + from.z * target.z + from.w * target.w
+            var dot = start.x * target.x + start.y * target.y + start.z * target.z + start.w * target.w
             if (dot < 0f) {
                 target = Quaternion(-target.x, -target.y, -target.z, -target.w)
                 dot = -dot
             }
             if (dot > 0.9995f) {
                 return Quaternion(
-                    from.x + (target.x - from.x) * t,
-                    from.y + (target.y - from.y) * t,
-                    from.z + (target.z - from.z) * t,
-                    from.w + (target.w - from.w) * t,
+                    start.x + (target.x - start.x) * t,
+                    start.y + (target.y - start.y) * t,
+                    start.z + (target.z - start.z) * t,
+                    start.w + (target.w - start.w) * t,
                 ).normalized()
             }
             val theta = acos(dot.coerceIn(-1f, 1f))
@@ -161,11 +177,41 @@ data class Quaternion(
             val a = sin((1f - t) * theta) / sinTheta
             val b = sin(t * theta) / sinTheta
             return Quaternion(
-                from.x * a + target.x * b,
-                from.y * a + target.y * b,
-                from.z * a + target.z * b,
-                from.w * a + target.w * b,
+                start.x * a + target.x * b,
+                start.y * a + target.y * b,
+                start.z * a + target.z * b,
+                start.w * a + target.w * b,
             ).normalized()
         }
+    }
+}
+
+/**
+ * Linear-light RGBA color in `[0, 1]` (values may exceed 1 in the working
+ * space). Perceptual `Oklab` interpolation lands with `ColorSuite` in Phase 5;
+ * [lerp] is the component-wise fallback used until then.
+ */
+@Serializable
+data class Color4f(
+    val r: Float = 0f,
+    val g: Float = 0f,
+    val b: Float = 0f,
+    val a: Float = 1f,
+) {
+    fun lerp(
+        other: Color4f,
+        t: Float,
+    ): Color4f =
+        Color4f(
+            r + (other.r - r) * t,
+            g + (other.g - g) * t,
+            b + (other.b - b) * t,
+            a + (other.a - a) * t,
+        )
+
+    companion object {
+        val TRANSPARENT = Color4f(0f, 0f, 0f, 0f)
+        val BLACK = Color4f(0f, 0f, 0f, 1f)
+        val WHITE = Color4f(1f, 1f, 1f, 1f)
     }
 }

@@ -36,13 +36,32 @@ class WalJournalTest {
         runBlocking {
             val journal = InMemoryWalJournal()
             repeat(10) { journal.append(mutation("m$it")) }
+            journal.markApplied(5L)
 
             journal.checkpoint(keepLast = 3)
 
-            assertEquals(listOf("m7", "m8", "m9"), journal.readFrom(0).map { it.targetId })
+            // Applied rows older than the newest three are pruned; unapplied rows stay.
+            assertEquals(listOf("m5", "m6", "m7", "m8", "m9"), journal.readFrom(0).map { it.targetId })
             // Sequence ids are preserved, not compacted: replay filters by seq, never by index.
             assertEquals(11L, journal.append(mutation("m10")))
             assertEquals(listOf("m10"), journal.readFrom(10).map { it.targetId })
+        }
+
+    @Test
+    fun `checkpoint never discards unapplied records`() =
+        runBlocking {
+            val journal = InMemoryWalJournal()
+            repeat(10) { journal.append(mutation("m$it")) }
+
+            journal.checkpoint(keepLast = 2)
+
+            // Nothing was replayed, so every record must survive even though retention is 2.
+            assertEquals(10, journal.readFrom(0).size)
+            assertEquals("m0", journal.readFrom(0).first().targetId)
+
+            journal.markApplied(8L)
+            journal.checkpoint(keepLast = 2)
+            assertEquals(listOf("m8", "m9"), journal.readFrom(0).map { it.targetId })
         }
 
     @Test

@@ -33,6 +33,10 @@ class TransientOverrideMap private constructor(
 
     internal fun withoutValue(key: OverrideKey): TransientOverrideMap = TransientOverrideMap(values - key)
 
+    /** Applies all [updates] in one snapshot (atomic multi-axis overrides). */
+    internal fun withValues(updates: Map<OverrideKey, Float>): TransientOverrideMap =
+        if (updates.isEmpty()) this else TransientOverrideMap(values + updates)
+
     companion object {
         val EMPTY = TransientOverrideMap(emptyMap())
     }
@@ -56,6 +60,19 @@ class TransientMutationManager {
         propertyPath: String,
         value: Float,
     ) = set(OverrideKey(targetId, propertyPath), value)
+
+    /**
+     * Publishes several overrides in a single CAS so the RenderThread never observes
+     * a torn multi-axis drag (World-Space Pivot Compensation updates anchor and
+     * compensated position together).
+     */
+    fun setBatch(overrides: Map<OverrideKey, Float>) {
+        if (overrides.isEmpty()) return
+        while (true) {
+            val previous = current.get()
+            if (current.compareAndSet(previous, previous.withValues(overrides))) return
+        }
+    }
 
     fun clear(key: OverrideKey) {
         while (true) {

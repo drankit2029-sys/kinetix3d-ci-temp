@@ -2,6 +2,9 @@
  * Kinetix3D Studio — core-model
  * Immutable project state: clips are Nodes, every clip owns a NodeGraph that powers
  * both the linear Effects Rack and the free-form Node Studio.
+ *
+ * Every type in this file is @Serializable so ProjectState (and mutations carrying
+ * clip/track/graph payloads) round-trips through the WAL and .kproj files.
  */
 
 package com.kinetix3d.model
@@ -10,20 +13,25 @@ import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.serialization.Serializable
 
 // ---------------------------------------------------------------------------
 // Composition settings & color
 // ---------------------------------------------------------------------------
 
+@Serializable
 enum class ColorPrimaries { REC709, REC2020, ACES_AP0 }
 
+@Serializable
 enum class TransferFunction { REC709, HLG, PQ, LINEAR }
 
+@Serializable
 data class ColorSpaceSpec(
     val primaries: ColorPrimaries = ColorPrimaries.REC709,
     val transfer: TransferFunction = TransferFunction.REC709,
 )
 
+@Serializable
 data class CompSettings(
     val width: Int,
     val height: Int,
@@ -42,6 +50,7 @@ data class CompSettings(
 // Transform / blending
 // ---------------------------------------------------------------------------
 
+@Serializable
 data class TransformBlock(
     val position: Vec3 = Vec3.ZERO,
     val anchor: Vec3 = Vec3.ZERO,
@@ -51,26 +60,50 @@ data class TransformBlock(
     val bend: Float = 0f,
 )
 
+/**
+ * The 28-mode layer algebra from Refined Features §4.2 (Porter-Duff Normal and
+ * Dissolve plus the 26 separable modes). [ADD] is retained as the historical
+ * name for Linear Dodge and is exactly equivalent to [LINEAR_DODGE].
+ */
+@Serializable
 enum class BlendMode {
     NORMAL,
-    ADD,
-    MULTIPLY,
-    SCREEN,
-    OVERLAY,
+    DISSOLVE,
     DARKEN,
-    LIGHTEN,
-    COLOR_DODGE,
+    MULTIPLY,
     COLOR_BURN,
-    HARD_LIGHT,
+    LINEAR_BURN,
+    DARKER_COLOR,
+    LIGHTEN,
+    SCREEN,
+    COLOR_DODGE,
+    LINEAR_DODGE,
+
+    /** Alias of [LINEAR_DODGE] (Linear Dodge (Add)). */
+    ADD,
+    LIGHTER_COLOR,
+    OVERLAY,
     SOFT_LIGHT,
+    HARD_LIGHT,
+    VIVID_LIGHT,
+    LINEAR_LIGHT,
+    PIN_LIGHT,
+    HARD_MIX,
     DIFFERENCE,
     EXCLUSION,
+    SUBTRACT,
+    DIVIDE,
     HUE,
     SATURATION,
     COLOR,
     LUMINOSITY,
+    ;
+
+    /** Collapses the legacy [ADD] alias onto its spec name [LINEAR_DODGE]. */
+    fun canonical(): BlendMode = if (this == ADD) LINEAR_DODGE else this
 }
 
+@Serializable
 enum class MatteMode {
     NONE,
     ALPHA,
@@ -84,17 +117,20 @@ enum class MatteMode {
 // scheduler never evaluates a graph to know when to pull a frame.
 // ---------------------------------------------------------------------------
 
+@Serializable
 sealed interface TimeRemapSpec {
-    /** 1.0 = real time, 2.0 = 2× speed, 0.5 = half speed. */
+    /** 1.0 = real time, 2.0 = 2× speed, 0.5 = half speed. Reverse uses [ClipNode.reversed]. */
+    @Serializable
     data class ConstantRate(
         val rate: Float,
     ) : TimeRemapSpec {
         init {
-            require(rate > 0f) { "ConstantRate must be positive (reverse playback is not a v1.0 feature)" }
+            require(rate > 0f) { "ConstantRate must be positive; use ClipNode.reversed for reverse playback" }
         }
     }
 
     /** Bezier velocity ramp; integral consumed by SpeedRampIntegrator (:core-evaluator). */
+    @Serializable
     data class VelocityBezierCurve(
         val curve: KeyframeCurve<Float>,
     ) : TimeRemapSpec
@@ -104,14 +140,19 @@ sealed interface TimeRemapSpec {
 // Clip payloads — sealed polymorphism replaces a bag of nullable fields.
 // ---------------------------------------------------------------------------
 
+@Serializable
 sealed interface ClipPayload
 
+@Serializable
 data object VideoClipPayload : ClipPayload
 
+@Serializable
 data object AudioClipPayload : ClipPayload
 
+@Serializable
 enum class TextAlignment { LEFT, CENTER, RIGHT }
 
+@Serializable
 data class TextSource(
     val text: String,
     val fontAssetId: String? = null,
@@ -119,18 +160,22 @@ data class TextSource(
     val fontSizeSp: Float = 48f,
 )
 
+@Serializable
 data class TextClipPayload(
     val textSource: TextSource,
 ) : ClipPayload
 
+@Serializable
 data class PolygonClipPayload(
     val polygonId: String,
 ) : ClipPayload
 
+@Serializable
 data class NullRigClipPayload(
     val is3D: Boolean = false,
 ) : ClipPayload
 
+@Serializable
 data class PreCompClipPayload(
     val targetCompId: String,
     val collapseTransformations: Boolean = false,
@@ -140,8 +185,10 @@ data class PreCompClipPayload(
 // Tracks & cut transitions
 // ---------------------------------------------------------------------------
 
+@Serializable
 enum class TrackType { VIDEO, AUDIO, FOLDER }
 
+@Serializable
 enum class TrackHeight(
     val dp: Int,
 ) {
@@ -150,6 +197,7 @@ enum class TrackHeight(
     DP_88(88),
 }
 
+@Serializable
 data class TrackNode(
     val trackId: String,
     val type: TrackType,
@@ -163,20 +211,34 @@ data class TrackNode(
     val audioDspChainId: String? = null,
 )
 
-/** What to do when a cut transition needs media beyond a clip's trimmed handles. */
-enum class HandlePolicy { FREEZE, LOOP, PING_PONG, STRETCH }
+/**
+ * How a cut transition sources frames beyond a clip's trimmed handles
+ * (Blueprint §3.2 / Refined Features §4.3):
+ * * [OVERLAP_HANDLES] — use the real media beyond the in/out trim points.
+ * * [RIPPLE_OVERLAP] — shorten/ripple the neighbours so no synthesized frames are needed.
+ * * [SYNTHESIZE_MIRROR_TILE] — mirror/extend the edge frame.
+ * * [SYNTHESIZE_OPTICAL_FLOW] — extrapolate edge motion with optical flow.
+ */
+@Serializable
+enum class HandlePolicy {
+    OVERLAP_HANDLES,
+    RIPPLE_OVERLAP,
+    SYNTHESIZE_MIRROR_TILE,
+    SYNTHESIZE_OPTICAL_FLOW,
+}
 
 /**
  * One cut-point transition. Lives on the CompositionGraph, never on a ClipNode —
  * a transition belongs to the cut between two clips, not to either side of it.
  */
+@Serializable
 data class CutTransition(
     val transitionId: String,
     val outgoingClipId: String,
     val incomingClipId: String,
     val durationUs: Long,
     val alignment: Float = 0.5f,
-    val handlePolicy: HandlePolicy = HandlePolicy.FREEZE,
+    val handlePolicy: HandlePolicy = HandlePolicy.OVERLAP_HANDLES,
     val progressCurve: KeyframeCurve<Float> = KeyframeCurve.linear(),
     val nodeGraph: NodeGraph = NodeGraph(),
 ) {
@@ -190,6 +252,7 @@ data class CutTransition(
 // Clips
 // ---------------------------------------------------------------------------
 
+@Serializable
 data class ClipNode(
     val clipId: String,
     val trackId: String,
@@ -201,6 +264,11 @@ data class ClipNode(
     val assetId: String? = null,
     val payload: ClipPayload = VideoClipPayload,
     val timeRemap: TimeRemapSpec = TimeRemapSpec.ConstantRate(1f),
+    /**
+     * Reverse playback (Phase 3 Reverse Clip tool). Time-remap rates stay
+     * positive; the decoder walks the source range from `sourceOutUs` backwards.
+     */
+    val reversed: Boolean = false,
     /** Set when this clip is nested inside a PreComp clip. */
     val parentClipId: String? = null,
     /** Links separated video (V1) and audio (A1) clips. */
@@ -223,18 +291,23 @@ data class ClipNode(
 // Media pool
 // ---------------------------------------------------------------------------
 
+@Serializable
 enum class AssetKind { VIDEO, AUDIO, IMAGE, FONT, MODEL, OTHER }
 
+@Serializable
 enum class ColorStandard { UNKNOWN, BT601, BT709, BT2020 }
 
+@Serializable
 enum class ColorTransfer { UNKNOWN, SDR, HLG, PQ, LINEAR }
 
+@Serializable
 enum class ColorRange { UNKNOWN, LIMITED, FULL }
 
 /**
  * Immutable media-pool entry. [uri] is always a plain [String] — never
  * android.net.Uri — so this module stays 100% JVM-clean.
  */
+@Serializable
 data class MediaAssetDescriptor(
     val assetId: String,
     val uri: String,
@@ -256,12 +329,16 @@ data class MediaAssetDescriptor(
 // Composition & project
 // ---------------------------------------------------------------------------
 
+@Serializable
 data class CompositionGraph(
     val compositionId: String,
     val name: String,
     val settings: CompSettings,
+    @Serializable(with = PersistentMapSerializer::class)
     val clips: PersistentMap<String, ClipNode> = persistentMapOf(),
+    @Serializable(with = PersistentListSerializer::class)
     val tracks: PersistentList<TrackNode> = persistentListOf(),
+    @Serializable(with = PersistentListSerializer::class)
     val transitions: PersistentList<CutTransition> = persistentListOf(),
 ) {
     /** Timeline duration = right-most clip edge (0 for an empty comp). */
@@ -270,11 +347,14 @@ data class CompositionGraph(
     fun trackById(trackId: String): TrackNode? = tracks.firstOrNull { it.trackId == trackId }
 }
 
+@Serializable
 data class ProjectState(
     val projectId: String,
     val settings: CompSettings,
+    @Serializable(with = PersistentMapSerializer::class)
     val compositions: PersistentMap<String, CompositionGraph>,
     val activeCompId: String,
+    @Serializable(with = PersistentMapSerializer::class)
     val mediaPool: PersistentMap<String, MediaAssetDescriptor> = persistentMapOf(),
 ) {
     init {

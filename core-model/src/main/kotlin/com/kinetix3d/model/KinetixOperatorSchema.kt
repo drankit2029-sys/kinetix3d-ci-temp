@@ -20,15 +20,46 @@ enum class OperatorCategory {
     UTILITY,
 }
 
+/**
+ * Unit of a numeric operator parameter.
+ *
+ * Every spatial quantity — blur radius, stroke width, displace amplitude, ray
+ * length, polygon feather — MUST be authored in [COMP_HEIGHT_NORM] so a `540p`
+ * proxy and a `4K` export render identically. Raw pixels never enter the model.
+ */
+enum class UnitType {
+    /** Fraction of composition height; `1.0 == comp height`. Resolution independent. */
+    COMP_HEIGHT_NORM,
+
+    /** Angle in degrees. */
+    DEGREES,
+
+    /** Duration in seconds. */
+    SECONDS,
+
+    /** Temporal frequency in hertz. */
+    HERTZ,
+
+    /** Exposure in photographic stops. */
+    STOPS,
+}
+
 /** How an operator behaves under 512×512 tile-bucket rendering. */
 sealed interface TilingCapability {
     /** Output depends only on the same pixel: safe for any tile, zero apron. */
     data object PointExact : TilingCapability
 
-    /** Samples neighbours within [radiusPx]: tileable while radiusPx ≤ maxApronPx. */
+    /**
+     * Samples neighbours within [radius] composition-height fractions.
+     * Tileable while `radius * compHeightPx <= maxApronPx`.
+     */
     data class LocalNeighborhood(
-        val radiusPx: Int,
-    ) : TilingCapability
+        val radius: Float,
+    ) : TilingCapability {
+        init {
+            require(radius >= 0f) { "LocalNeighborhood radius must be non-negative" }
+        }
+    }
 
     /** Non-local by nature (sort, rays, global blur): hard Tile Barrier upstream. */
     data object GlobalSpatialBarrier : TilingCapability
@@ -45,7 +76,7 @@ sealed interface ParamSpec {
         val min: Float = 0f,
         val max: Float = 1f,
         val step: Float = 0.01f,
-        val unit: String? = null,
+        val unit: UnitType? = null,
     ) : ParamSpec
 
     data class IntParam(
@@ -67,6 +98,7 @@ sealed interface ParamSpec {
         override val displayName: String,
         val defaultX: Float = 0f,
         val defaultY: Float = 0f,
+        val unit: UnitType? = null,
     ) : ParamSpec
 
     data class Vec3Param(
@@ -75,6 +107,7 @@ sealed interface ParamSpec {
         val defaultX: Float = 0f,
         val defaultY: Float = 0f,
         val defaultZ: Float = 0f,
+        val unit: UnitType? = null,
     ) : ParamSpec
 
     data class QuaternionParam(
@@ -111,9 +144,19 @@ data class SocketSpec(
     val required: Boolean = false,
 )
 
+/**
+ * One selectable operator mode. [visibleParams] lists the [ParamSpec.key]s the
+ * inspector shows for this mode (Mode-Aware Deep Search and the Phase 5 shaders
+ * both key off this list).
+ */
 data class ModeSpec(
     val modeId: String,
     val label: String,
+    val visibleParams: List<String> = emptyList(),
+    /** Overrides [KinetixOperatorSchema.tiling] when this mode is active. */
+    val tilingOverride: TilingCapability? = null,
+    /** Temporal feedback mode (datamosh/advection): carries VRAM-bounded checkpoints. */
+    val isStateful: Boolean = false,
 )
 
 data class KinetixOperatorSchema(
@@ -128,6 +171,8 @@ data class KinetixOperatorSchema(
     val isStateful: Boolean = false,
     /** CopyBackground & Glass: binds the read-only underlyingComposite snapshot. */
     val readsUnderlyingComposite: Boolean = false,
+    /** Mode-Aware Deep Search terms (synonyms never shown in the UI). */
+    val searchSynonyms: List<String> = emptyList(),
     val version: Int = 1,
 ) {
     init {
@@ -136,13 +181,31 @@ data class KinetixOperatorSchema(
         require(sockets.map { it.name }.toSet().size == sockets.size) { "Duplicate socket name in '$id'" }
         require(params.map { it.key }.toSet().size == params.size) { "Duplicate param key in '$id'" }
         require(modes.map { it.modeId }.toSet().size == modes.size) { "Duplicate mode id in '$id'" }
+        val paramKeys = params.map { it.key }.toSet()
+        modes.forEach { mode ->
+            val unknown = mode.visibleParams.filterNot { it in paramKeys }
+            require(unknown.isEmpty()) { "Mode '${mode.modeId}' in '$id' references unknown params $unknown" }
+        }
     }
+
+    /** Mode selected by [modeId]; a `null` id selects the schema's first mode. */
+    fun mode(modeId: String? = null): ModeSpec? =
+        if (modeId == null) modes.firstOrNull() else modes.firstOrNull { it.modeId == modeId }
+
+    /** Effective tile capability for the active mode. */
+    fun tilingFor(modeId: String? = null): TilingCapability = mode(modeId)?.tilingOverride ?: tiling
+
+    /** Effective temporal-feedback flag for the active mode. */
+    fun isStatefulFor(modeId: String? = null): Boolean = mode(modeId)?.isStateful ?: isStateful
 }
 
 /**
  * Static descriptor catalog. The 14 operators listed here are exactly the v1.0
  * (Phase 5) set; PolygonNode/FollowPathNode ship in Phase 4, the point/instancing
  * suite and Generator/GLSL sandbox are v1.5.
+ *
+ * Spatial parameters are expressed in composition-height fractions (see
+ * [UnitType.COMP_HEIGHT_NORM]) — never raw pixels.
  */
 object KinetixOperatorCatalog {
     private fun imageIn(required: Boolean = true) =
@@ -182,16 +245,64 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("gaussian", "Gaussian"),
-                    ModeSpec("kawase", "Kawase Dual Filter"),
-                    ModeSpec("bokeh_dof", "Bokeh DoF"),
+                    ModeSpec("gaussian", "Gaussian", visibleParams = listOf("radius", "quality")),
+                    ModeSpec("kawase", "Kawase Dual Filter", visibleParams = listOf("radius", "quality")),
+                    ModeSpec("bokeh_dof", "Bokeh DoF", visibleParams = listOf("radius", "quality")),
+                    ModeSpec("box", "Box", visibleParams = listOf("radius", "quality")),
+                    ModeSpec(
+                        "directional_motion",
+                        "Directional Motion",
+                        visibleParams = listOf("radius", "angle", "quality"),
+                    ),
+                    ModeSpec(
+                        "radial_zoom",
+                        "Radial Zoom",
+                        visibleParams = listOf("radius", "quality"),
+                        tilingOverride = TilingCapability.GlobalSpatialBarrier,
+                    ),
+                    ModeSpec(
+                        "radial_spin",
+                        "Radial Spin",
+                        visibleParams = listOf("radius", "angle", "quality"),
+                        tilingOverride = TilingCapability.GlobalSpatialBarrier,
+                    ),
+                    ModeSpec("surface_bilateral", "Surface Bilateral", visibleParams = listOf("radius", "quality")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("radius", "Radius", default = 8f, min = 0f, max = 128f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "radius",
+                        "Radius",
+                        default = 0.02f,
+                        min = 0f,
+                        max = 0.5f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
+                    ParamSpec.FloatParam(
+                        "angle",
+                        "Angle",
+                        default = 0f,
+                        min = -180f,
+                        max = 180f,
+                        step = 1f,
+                        unit = UnitType.DEGREES,
+                    ),
                     ParamSpec.IntParam("quality", "Quality", default = 2, min = 1, max = 4),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(128),
+            tiling = TilingCapability.LocalNeighborhood(0.5f),
+            searchSynonyms =
+                listOf(
+                    "gaussian",
+                    "lens blur",
+                    "dof",
+                    "depth of field",
+                    "zoom blur",
+                    "radial",
+                    "motion blur",
+                    "bilateral",
+                    "box blur",
+                ),
         )
 
     val glow =
@@ -202,16 +313,55 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("optical_mip", "Optical Mip-Chain"),
-                    ModeSpec("saber", "Saber"),
+                    ModeSpec(
+                        "optical_mip",
+                        "Optical Mip-Chain",
+                        visibleParams = listOf("threshold", "intensity", "radius"),
+                    ),
+                    ModeSpec("saber", "Neon Saber Rim", visibleParams = listOf("threshold", "intensity", "radius")),
+                    ModeSpec(
+                        "outer_edge",
+                        "Outer Edge Glow",
+                        visibleParams = listOf("threshold", "intensity", "radius"),
+                    ),
+                    ModeSpec("inner", "Inner Glow", visibleParams = listOf("threshold", "intensity", "radius")),
+                    ModeSpec(
+                        "anamorphic_streak",
+                        "Anamorphic Streak",
+                        visibleParams = listOf("threshold", "intensity", "radius"),
+                    ),
+                    ModeSpec(
+                        "film_halation",
+                        "35mm Film Halation",
+                        visibleParams = listOf("threshold", "intensity", "radius"),
+                    ),
                 ),
             params =
                 listOf(
                     ParamSpec.FloatParam("threshold", "Threshold", default = 0.8f, max = 4f),
                     ParamSpec.FloatParam("intensity", "Intensity", default = 1f, max = 8f),
-                    ParamSpec.FloatParam("radius", "Radius", default = 24f, min = 0f, max = 128f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "radius",
+                        "Radius Spread",
+                        default = 0.03f,
+                        min = 0f,
+                        max = 0.25f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(128),
+            tiling = TilingCapability.LocalNeighborhood(0.25f),
+            searchSynonyms =
+                listOf(
+                    "bloom",
+                    "halation",
+                    "anamorphic",
+                    "neon",
+                    "saber",
+                    "outer glow",
+                    "inner glow",
+                    "light spill",
+                ),
         )
 
     val tiles =
@@ -222,17 +372,26 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), imageOut),
             modes =
                 listOf(
-                    ModeSpec("mirror", "Mirror"),
-                    ModeSpec("repeat", "Repeat"),
-                    ModeSpec("kaleidoscope", "Kaleidoscope"),
+                    ModeSpec("mirror", "Mirror", visibleParams = listOf("gridX", "gridY", "angle")),
+                    ModeSpec("repeat", "Repeat", visibleParams = listOf("gridX", "gridY", "angle")),
+                    ModeSpec("kaleidoscope", "Kaleidoscope", visibleParams = listOf("gridX", "gridY", "angle")),
                 ),
             params =
                 listOf(
                     ParamSpec.FloatParam("gridX", "Grid X", default = 3f, min = 1f, max = 32f, step = 1f),
                     ParamSpec.FloatParam("gridY", "Grid Y", default = 3f, min = 1f, max = 32f, step = 1f),
-                    ParamSpec.FloatParam("angle", "Angle", default = 0f, min = -180f, max = 180f, unit = "°"),
+                    ParamSpec.FloatParam(
+                        "angle",
+                        "Angle",
+                        default = 0f,
+                        min = -180f,
+                        max = 180f,
+                        step = 1f,
+                        unit = UnitType.DEGREES,
+                    ),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("mirror tiles", "kaleidoscope", "repeat", "grid", "offset tiles"),
         )
 
     val warp =
@@ -243,17 +402,35 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("turbulent", "Turbulent"),
-                    ModeSpec("displace_map", "Displace Map"),
-                    ModeSpec("wave", "Wave"),
+                    ModeSpec("turbulent", "Turbulent", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec("displace_map", "Displace Map", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec("wave", "Wave", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec("swirl", "Swirl", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec("bulge", "Bulge", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec(
+                        "bezier_mesh",
+                        "Bezier Mesh",
+                        visibleParams = listOf("amplitude", "seed"),
+                        tilingOverride = TilingCapability.PointExact,
+                    ),
+                    ModeSpec("liquify", "Liquify", visibleParams = listOf("amplitude", "frequency", "seed")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("amplitude", "Amplitude", default = 16f, min = 0f, max = 256f, unit = "px"),
-                    ParamSpec.FloatParam("frequency", "Frequency", default = 4f, min = 0f, max = 64f),
+                    ParamSpec.FloatParam(
+                        "amplitude",
+                        "Amplitude",
+                        default = 0.02f,
+                        min = 0f,
+                        max = 0.25f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
+                    ParamSpec.FloatParam("frequency", "Frequency", default = 4f, min = 0f, max = 64f, step = 0.1f),
                     ParamSpec.IntParam("seed", "Seed", default = 0, max = 9999),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(256),
+            tiling = TilingCapability.LocalNeighborhood(0.25f),
+            searchSynonyms = listOf("turbulence", "displace", "wave", "swirl", "bulge", "liquify", "mesh warp"),
         )
 
     val glitch =
@@ -264,17 +441,46 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("rgb_split", "RGB Split"),
-                    ModeSpec("block", "Block Corruption"),
-                    ModeSpec("scanline", "Scanline"),
+                    ModeSpec("rgb_split", "RGB Split", visibleParams = listOf("intensity", "seed")),
+                    ModeSpec("block", "Block Corruption", visibleParams = listOf("intensity", "seed", "blockSize")),
+                    ModeSpec("scanline", "Scanline", visibleParams = listOf("intensity", "seed")),
+                    ModeSpec(
+                        "datamosh",
+                        "True P-Frame Datamosh",
+                        visibleParams = listOf("intensity", "seed"),
+                        isStateful = true,
+                    ),
+                    ModeSpec(
+                        "pixel_sort",
+                        "Pixel Sort",
+                        visibleParams = listOf("intensity", "seed"),
+                        tilingOverride = TilingCapability.GlobalSpatialBarrier,
+                    ),
+                    ModeSpec("vhs_crt", "VHS / CRT", visibleParams = listOf("intensity", "seed", "blockSize")),
+                    ModeSpec(
+                        "wave_slice_tear",
+                        "Wave Slice Tear",
+                        visibleParams = listOf("intensity", "seed", "blockSize"),
+                    ),
                 ),
             params =
                 listOf(
                     ParamSpec.FloatParam("intensity", "Intensity", default = 0.5f),
                     ParamSpec.IntParam("seed", "Seed", default = 0, max = 9999),
-                    ParamSpec.IntParam("blockSize", "Block Size", default = 16, min = 1, max = 256),
+                    ParamSpec.FloatParam(
+                        "blockSize",
+                        "Block Size",
+                        default = 0.015f,
+                        min = 0.001f,
+                        max = 0.24f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                 ),
             tiling = TilingCapability.PointExact,
+            // Datamosh carries temporal feedback checkpoints in one of the modes.
+            isStateful = true,
+            searchSynonyms = listOf("datamosh", "pixel sort", "vhs", "crt", "scanline", "rgb split", "tear"),
         )
 
     val vectorify =
@@ -285,8 +491,8 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("stylize", "Stylize"),
-                    ModeSpec("posterize", "Oklab Posterize"),
+                    ModeSpec("stylize", "Stylize", visibleParams = listOf("levels", "smoothRadius")),
+                    ModeSpec("posterize", "Oklab Posterize", visibleParams = listOf("levels")),
                 ),
             params =
                 listOf(
@@ -294,13 +500,15 @@ object KinetixOperatorCatalog {
                     ParamSpec.FloatParam(
                         "smoothRadius",
                         "Smooth Radius",
-                        default = 4f,
+                        default = 0.004f,
                         min = 0f,
-                        max = 32f,
-                        unit = "px",
+                        max = 0.03f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
                     ),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(16),
+            tiling = TilingCapability.LocalNeighborhood(0.03f),
+            searchSynonyms = listOf("posterize", "oklab", "stylize", "vector", "edge outline"),
         )
 
     val oscillate =
@@ -311,16 +519,33 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), imageOut),
             modes =
                 listOf(
-                    ModeSpec("oscillate", "Oscillate"),
-                    ModeSpec("auto_shake", "Auto-Shake"),
+                    ModeSpec("oscillate", "Oscillate", visibleParams = listOf("amplitude", "frequency", "seed")),
+                    ModeSpec("auto_shake", "Auto-Shake", visibleParams = listOf("amplitude", "frequency", "seed")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("amplitude", "Amplitude", default = 8f, min = 0f, max = 128f, unit = "px"),
-                    ParamSpec.FloatParam("frequency", "Frequency", default = 2f, min = 0f, max = 30f, unit = "Hz"),
+                    ParamSpec.FloatParam(
+                        "amplitude",
+                        "Amplitude",
+                        default = 0.01f,
+                        min = 0f,
+                        max = 0.12f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
+                    ParamSpec.FloatParam(
+                        "frequency",
+                        "Frequency",
+                        default = 2f,
+                        min = 0f,
+                        max = 30f,
+                        step = 0.1f,
+                        unit = UnitType.HERTZ,
+                    ),
                     ParamSpec.IntParam("seed", "Seed", default = 0, max = 9999),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("shake", "handheld", "jitter", "wobble", "oscillate"),
         )
 
     val copyBackground =
@@ -331,17 +556,26 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("copy_background", "Copy Background"),
-                    ModeSpec("acrylic", "Acrylic"),
-                    ModeSpec("loupe", "Loupe"),
+                    ModeSpec("copy_background", "Copy Background", visibleParams = listOf("blurRadius", "tint")),
+                    ModeSpec("acrylic", "Acrylic", visibleParams = listOf("blurRadius", "tint")),
+                    ModeSpec("loupe", "Loupe", visibleParams = listOf("blurRadius", "tint")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("blurRadius", "Blur Radius", default = 16f, min = 0f, max = 64f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "blurRadius",
+                        "Blur Radius",
+                        default = 0.015f,
+                        min = 0f,
+                        max = 0.06f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                     ParamSpec.FloatParam("tint", "Tint", default = 0f, min = -1f, max = 1f),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(64),
+            tiling = TilingCapability.LocalNeighborhood(0.06f),
             readsUnderlyingComposite = true,
+            searchSynonyms = listOf("glass", "acrylic", "frosted", "loupe", "magnify", "backdrop blur"),
         )
 
     val layerStyle =
@@ -352,17 +586,34 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("stroke", "Stroke"),
-                    ModeSpec("bevel", "Bevel"),
-                    ModeSpec("shadow", "Drop Shadow"),
+                    ModeSpec("stroke", "Stroke", visibleParams = listOf("width", "softness", "color")),
+                    ModeSpec("bevel", "Bevel", visibleParams = listOf("width", "softness", "color")),
+                    ModeSpec("shadow", "Drop Shadow", visibleParams = listOf("width", "softness", "color")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("width", "Width", default = 4f, min = 0f, max = 64f, unit = "px"),
-                    ParamSpec.FloatParam("softness", "Softness", default = 2f, min = 0f, max = 64f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "width",
+                        "Width",
+                        default = 0.004f,
+                        min = 0f,
+                        max = 0.06f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
+                    ParamSpec.FloatParam(
+                        "softness",
+                        "Softness",
+                        default = 0.002f,
+                        min = 0f,
+                        max = 0.06f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                     ParamSpec.Color4fParam("color", "Color", defaultA = 1f),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(128),
+            tiling = TilingCapability.LocalNeighborhood(0.06f),
+            searchSynonyms = listOf("stroke", "bevel", "drop shadow", "outline", "emboss"),
         )
 
     val cornerPin =
@@ -373,18 +624,27 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), imageOut),
             modes =
                 listOf(
-                    ModeSpec("corner_pin", "Corner Pin"),
-                    ModeSpec("card3d", "Card3D"),
+                    ModeSpec(
+                        "corner_pin",
+                        "Corner Pin",
+                        visibleParams = listOf("topLeft", "topRight", "bottomRight", "bottomLeft", "perspective"),
+                    ),
+                    ModeSpec(
+                        "card3d",
+                        "Card3D",
+                        visibleParams = listOf("topLeft", "topRight", "bottomRight", "bottomLeft", "perspective"),
+                    ),
                 ),
             params =
                 listOf(
-                    ParamSpec.Vec2Param("topLeft", "Top Left"),
-                    ParamSpec.Vec2Param("topRight", "Top Right"),
-                    ParamSpec.Vec2Param("bottomRight", "Bottom Right"),
-                    ParamSpec.Vec2Param("bottomLeft", "Bottom Left"),
+                    ParamSpec.Vec2Param("topLeft", "Top Left", unit = UnitType.COMP_HEIGHT_NORM),
+                    ParamSpec.Vec2Param("topRight", "Top Right", unit = UnitType.COMP_HEIGHT_NORM),
+                    ParamSpec.Vec2Param("bottomRight", "Bottom Right", unit = UnitType.COMP_HEIGHT_NORM),
+                    ParamSpec.Vec2Param("bottomLeft", "Bottom Left", unit = UnitType.COMP_HEIGHT_NORM),
                     ParamSpec.FloatParam("perspective", "Perspective", default = 0f, min = 0f, max = 1f),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("corner pin", "card3d", "homography", "perspective", "page peel"),
         )
 
     val optics =
@@ -395,17 +655,30 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("god_rays", "God Rays"),
-                    ModeSpec("anamorphic", "Anamorphic Streak"),
-                    ModeSpec("chromatic_aberration", "Chromatic Aberration"),
+                    ModeSpec("god_rays", "God Rays", visibleParams = listOf("threshold", "length", "tint")),
+                    ModeSpec("anamorphic", "Anamorphic Streak", visibleParams = listOf("threshold", "length", "tint")),
+                    ModeSpec(
+                        "chromatic_aberration",
+                        "Chromatic Aberration",
+                        visibleParams = listOf("length", "tint"),
+                    ),
                 ),
             params =
                 listOf(
                     ParamSpec.FloatParam("threshold", "Threshold", default = 0.9f, max = 4f),
-                    ParamSpec.FloatParam("length", "Ray Length", default = 64f, min = 0f, max = 512f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "length",
+                        "Ray Length",
+                        default = 0.06f,
+                        min = 0f,
+                        max = 0.5f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                     ParamSpec.Color4fParam("tint", "Tint", defaultR = 1f, defaultG = 0.9f, defaultB = 0.7f),
                 ),
             tiling = TilingCapability.GlobalSpatialBarrier,
+            searchSynonyms = listOf("god rays", "light rays", "anamorphic", "flare", "chromatic aberration", "lens"),
         )
 
     val timeFx =
@@ -416,15 +689,24 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), imageOut),
             modes =
                 listOf(
-                    ModeSpec("echo", "Time Echo"),
-                    ModeSpec("freeze", "Freeze Frame"),
+                    ModeSpec("echo", "Time Echo", visibleParams = listOf("echoCount", "stepSeconds")),
+                    ModeSpec("freeze", "Freeze Frame", visibleParams = listOf("stepSeconds")),
                 ),
             params =
                 listOf(
                     ParamSpec.IntParam("echoCount", "Echo Count", default = 3, min = 1, max = 16),
-                    ParamSpec.FloatParam("stepSeconds", "Step", default = 0.1f, min = 0f, max = 2f, unit = "s"),
+                    ParamSpec.FloatParam(
+                        "stepSeconds",
+                        "Step",
+                        default = 0.1f,
+                        min = 0f,
+                        max = 2f,
+                        step = 0.01f,
+                        unit = UnitType.SECONDS,
+                    ),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("time echo", "motion trails", "freeze frame", "ghosting"),
         )
 
     val colorSuite =
@@ -435,19 +717,32 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("cdl", "ASC-CDL"),
-                    ModeSpec("curves", "Curves"),
-                    ModeSpec("lut", "3D LUT (.cube)"),
-                    ModeSpec("hsl", "HSL Qualifier"),
+                    ModeSpec(
+                        "cdl",
+                        "ASC-CDL",
+                        visibleParams = listOf("exposure", "contrast", "saturation", "temperature"),
+                    ),
+                    ModeSpec("curves", "Curves", visibleParams = listOf("contrast", "saturation")),
+                    ModeSpec("lut", "3D LUT (.cube)", visibleParams = listOf("saturation")),
+                    ModeSpec("hsl", "HSL Qualifier", visibleParams = listOf("saturation", "temperature")),
                 ),
             params =
                 listOf(
-                    ParamSpec.FloatParam("exposure", "Exposure", default = 0f, min = -5f, max = 5f, unit = "stops"),
+                    ParamSpec.FloatParam(
+                        "exposure",
+                        "Exposure",
+                        default = 0f,
+                        min = -5f,
+                        max = 5f,
+                        step = 0.05f,
+                        unit = UnitType.STOPS,
+                    ),
                     ParamSpec.FloatParam("contrast", "Contrast", default = 1f, min = 0f, max = 4f),
                     ParamSpec.FloatParam("saturation", "Saturation", default = 1f, min = 0f, max = 4f),
                     ParamSpec.FloatParam("temperature", "Temperature", default = 0f, min = -1f, max = 1f),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("cdl", "curves", "lut", "hsl", "grade", "color correction", "exposure"),
         )
 
     val keyer =
@@ -458,9 +753,17 @@ object KinetixOperatorCatalog {
             sockets = listOf(imageIn(), maskIn, imageOut),
             modes =
                 listOf(
-                    ModeSpec("chroma", "Chroma Key"),
-                    ModeSpec("polyhedral", "3D Polyhedral Key"),
-                    ModeSpec("luma", "Luma Key"),
+                    ModeSpec(
+                        "chroma",
+                        "Chroma Key",
+                        visibleParams = listOf("keyColor", "tolerance", "softness", "despill"),
+                    ),
+                    ModeSpec(
+                        "polyhedral",
+                        "3D Polyhedral Key",
+                        visibleParams = listOf("keyColor", "tolerance", "softness", "despill"),
+                    ),
+                    ModeSpec("luma", "Luma Key", visibleParams = listOf("keyColor", "tolerance", "softness")),
                 ),
             params =
                 listOf(
@@ -470,6 +773,7 @@ object KinetixOperatorCatalog {
                     ParamSpec.FloatParam("despill", "Despill", default = 0.5f),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("chroma key", "green screen", "luma key", "despill", "polyhedral key"),
         )
 
     val polygon =
@@ -481,17 +785,27 @@ object KinetixOperatorCatalog {
             params =
                 listOf(
                     ParamSpec.SplineVerticesParam("vertices", "Vertices", maxVertices = 256, closed = true),
-                    ParamSpec.FloatParam("feather", "Feather", default = 0f, min = 0f, max = 128f, unit = "px"),
+                    ParamSpec.FloatParam(
+                        "feather",
+                        "Feather",
+                        default = 0f,
+                        min = 0f,
+                        max = 0.12f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
+                    ),
                     ParamSpec.FloatParam(
                         "cornerRadius",
                         "Corner Radius",
                         default = 0f,
                         min = 0f,
-                        max = 256f,
-                        unit = "px",
+                        max = 0.24f,
+                        step = 0.001f,
+                        unit = UnitType.COMP_HEIGHT_NORM,
                     ),
                 ),
-            tiling = TilingCapability.LocalNeighborhood(128),
+            tiling = TilingCapability.LocalNeighborhood(0.24f),
+            searchSynonyms = listOf("polygon", "mask", "shape", "bezier", "feather"),
         )
 
     val followPath =
@@ -507,6 +821,7 @@ object KinetixOperatorCatalog {
                     ParamSpec.BoolParam("orientToPath", "Orient to Path", default = true),
                 ),
             tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("follow path", "motion path", "orient", "spline"),
         )
 
     /** The 14 v1.0 polymorphic operators, in product-spec order. */

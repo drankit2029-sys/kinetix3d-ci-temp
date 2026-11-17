@@ -12,6 +12,7 @@ package com.kinetix3d.model
 
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.serialization.Serializable
 import java.util.TreeSet
 
 object NodeSchemaIds {
@@ -20,22 +21,78 @@ object NodeSchemaIds {
 }
 
 /** A connection into one input socket of a graph node. */
+@Serializable
 sealed interface NodeInput {
+    @Serializable
     data class FromNode(
         val nodeId: String,
         val outputSocket: String = "out",
     ) : NodeInput
 
     /** Serialized literal (float/color/curve id …) for unconnected sockets. */
+    @Serializable
     data class Literal(
         val value: String,
     ) : NodeInput
 }
 
+/** Which authoring source currently drives a [ParamChannel]. */
+enum class ParamChannelSource {
+    /** Static slider value. */
+    STATIC,
+
+    /** Keyframed track. */
+    CURVE,
+
+    /** Bytecode expression evaluated by :core-evaluator. */
+    EXPRESSION,
+}
+
+/**
+ * Authored value for one numeric operator parameter.
+ *
+ * Vector/colour parameters are stored as one channel per component (for example
+ * `position.x`, `position.y`, `position.z`), so every channel is uniformly
+ * keyframable and expression-driven. Precedence is expression > curve > static
+ * value; a blank expression and an empty curve are treated as absent.
+ */
+@Serializable
+data class ParamChannel(
+    val value: Float = 0f,
+    val curve: KeyframeCurve<Float>? = null,
+    val expression: String? = null,
+) {
+    fun source(): ParamChannelSource =
+        when {
+            !expression.isNullOrBlank() -> ParamChannelSource.EXPRESSION
+            curve != null && !curve.isEmpty -> ParamChannelSource.CURVE
+            else -> ParamChannelSource.STATIC
+        }
+
+    companion object {
+        fun constant(value: Float): ParamChannel = ParamChannel(value = value)
+
+        fun animated(curve: KeyframeCurve<Float>): ParamChannel = ParamChannel(curve = curve)
+
+        fun driven(expression: String): ParamChannel = ParamChannel(expression = expression)
+    }
+}
+
+@Serializable
 data class GraphNode(
     val nodeId: String,
     val schemaId: String,
+    @Serializable(with = PersistentMapSerializer::class)
     val inputs: PersistentMap<String, NodeInput> = persistentMapOf(),
+    /** Active [KinetixOperatorSchema.modes] entry; `null` selects the schema's first mode. */
+    val modeId: String? = null,
+    /** Per-parameter authored values, curves and expressions, keyed by [ParamSpec.key]. */
+    @Serializable(with = PersistentMapSerializer::class)
+    val params: PersistentMap<String, ParamChannel> = persistentMapOf(),
+    /** Bypass switch (the UI's `fx` toggle); disabled nodes pass their input through. */
+    val enabled: Boolean = true,
+    /** Free-form Node Studio canvas position in comp-height units. */
+    val canvasPosition: Vec2 = Vec2.ZERO,
 ) {
     init {
         require(nodeId.isNotBlank()) { "Node id must not be blank" }
@@ -43,24 +100,30 @@ data class GraphNode(
     }
 }
 
+@Serializable
 sealed interface TopoSortResult {
     /** Execution order: every dependency appears before its dependents; output is last. */
+    @Serializable
     data class Success(
         val order: List<String>,
     ) : TopoSortResult
 
+    @Serializable
     data class Cycle(
         val cycleNodeIds: List<String>,
         val message: String,
     ) : TopoSortResult
 
+    @Serializable
     data class InvalidGraph(
         val missingNodeIds: List<String>,
         val message: String,
     ) : TopoSortResult
 }
 
+@Serializable
 data class NodeGraph(
+    @Serializable(with = PersistentMapSerializer::class)
     val nodes: PersistentMap<String, GraphNode> = persistentMapOf(),
     /** CopyBackground & Glass binds the read-only underlyingComposite snapshot. */
     val readsUnderlyingComposite: Boolean = false,
