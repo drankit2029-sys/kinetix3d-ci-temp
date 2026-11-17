@@ -1,4 +1,4 @@
 {
     "kotlin.languageServer.enabled": true,
-    "kotlin.compiler.jvm.target": "17"
+    "kotlin.compiler.jvm.target": "21"
 }

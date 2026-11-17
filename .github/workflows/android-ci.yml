@@ -36,8 +36,8 @@ jobs:
           "$SDKMANAGER" "platforms;android-37.1" "build-tools;37.0.0" "ndk;28.2.13676358"
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
-      # cargo-ndk (via the io.github.rodroidmods.android-rust plugin) links the
-      # Rust core; preinstall the stable toolchain and Android targets.
+      # cargo-ndk links the Rust core; preinstall the stable toolchain and
+      # Android targets.
       - name: Install Rust toolchain, Android targets & cargo-ndk
         run: |
           set -euxo pipefail

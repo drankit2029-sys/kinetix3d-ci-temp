@@ -14,7 +14,6 @@ coreKtx = "1.19.1"
 lifecycleRuntime = "2.11.0"
 activityCompose = "1.13.0"
 sqlite = "2.7.1"
-room = "2.8.5"
 media3 = "1.11.1"
 filament = "1.80.1"
 litert = "2.3.2"
@@ -46,12 +45,10 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-compose-material3-windowsize = { group = "androidx.compose.material3", name = "material3-window-size-class" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 
-# Database & persistence (Phase 1+: SQLite WAL journal, Room media-pool index)
+# Database & persistence (Phase 1+: SQLite WAL journal)
 androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "sqlite" }
-androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 
 # Media & native (Phase 3+: decoder pool, All-I proxy worker; native core is Rust)
-androidx-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
 androidx-media3-extractor = { group = "androidx.media3", name = "media3-extractor", version.ref = "media3" }
 
 # 3D stage & offline AI (Phase 6+/7+; filament ships on Maven Central, litert on Google Maven)

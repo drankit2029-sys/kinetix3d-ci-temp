@@ -41,7 +41,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.media3.extractor)
-    implementation(libs.androidx.media3.transformer)
 }
 
 // --- Rust native core (cargo) -------------------------------------------------

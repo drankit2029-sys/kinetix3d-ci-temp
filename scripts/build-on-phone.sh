@@ -307,6 +307,11 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
     fi
     "${SSH[@]}" "set -euo pipefail
 cd \$HOME
+# Remove stale module sources before extracting: renamed/deleted .kt/.rs files
+# would otherwise survive and cause Duplicate Class / Redeclaration errors.
+if [ -d '$PROJECT_DIR_NAME' ]; then
+    find '$PROJECT_DIR_NAME' -mindepth 2 -maxdepth 2 -type d -name src -exec rm -rf {} +
+fi
 tar -xzf '$STAGE/$PROJECT-sync.tar.gz'
 cd '$PROJECT_DIR_NAME'
 chmod +x ./gradlew
@@ -346,7 +351,22 @@ fi"
 fi
 
 echo "[3/5] Building on phone (incremental)..."
-"${SSH[@]}" "cd \$HOME && tar -xzf '$STAGE/$PROJECT-sync.tar.gz' && cd '$PROJECT_DIR_NAME' && chmod +x ./gradlew && [ -f local.properties ] || echo sdk.dir=\$HOME/android-sdk > local.properties && bash ./gradlew assembleDebug --configuration-cache --console=plain"
+"${SSH[@]}" bash -s -- "$STAGE/$PROJECT-sync.tar.gz" "$PROJECT_DIR_NAME" <<'REMOTE'
+set -euo pipefail
+archive="$1"
+project="$2"
+cd "$HOME"
+# Remove stale module sources before extracting: renamed/deleted .kt/.rs files
+# would otherwise survive and cause Duplicate Class / Redeclaration errors.
+if [ -d "$project" ]; then
+    find "$project" -mindepth 2 -maxdepth 2 -type d -name src -exec rm -rf {} +
+fi
+tar -xzf "$archive"
+cd "$project"
+chmod +x ./gradlew
+[ -f local.properties ] || printf 'sdk.dir=%s\n' "$HOME/android-sdk" > local.properties
+bash ./gradlew assembleDebug --configuration-cache --console=plain
+REMOTE
 
 wait_for_target
 echo "[4/5] Installing on $TARGET..."

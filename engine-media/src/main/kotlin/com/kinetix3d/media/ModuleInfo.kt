@@ -1,6 +1,6 @@
 /*
  * Kinetix3D Studio — engine-media
- * MediaCodec decoder pool, VFR-to-CFR H.264 All-I proxy worker, Oboe audio DSP engine.
+ * MediaCodec decoder pool, VFR-to-CFR H.264 All-I proxy worker, Rust audio DSP engine.
  *
  * Day-1 scaffold marker only; the real implementation lands in the phase
  * pinned by kinetix3d_step_by_step_implementation_roadmap.md.

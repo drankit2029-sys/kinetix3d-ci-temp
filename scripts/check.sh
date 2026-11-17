@@ -87,9 +87,15 @@ echo "      archive: $(du -h "$TMP" | awk '{print $1}')"
 echo "[2/3] Syncing to phone..."
 adb -s "$BUILD" shell mkdir -p "$STAGE" >/dev/null 2>&1 || true
 adb -s "$BUILD" push "$TMP" "$STAGE/$PROJECT_DIR_NAME-check.tar.gz" >/dev/null
-"${SSH[@]}" bash -s -- "$STAGE/$PROJECT_DIR_NAME-check.tar.gz" <<'REMOTE'
+"${SSH[@]}" bash -s -- "$STAGE/$PROJECT_DIR_NAME-check.tar.gz" "$PROJECT_DIR_NAME" <<'REMOTE'
 archive="$1"
+project="$2"
 cd "$HOME" || exit 1
+# Remove stale module sources before extracting: renamed/deleted .kt/.rs files
+# would otherwise survive and cause Duplicate Class / Redeclaration errors.
+if [ -d "$project" ]; then
+    find "$project" -mindepth 2 -maxdepth 2 -type d -name src -exec rm -rf {} +
+fi
 tar -xzf "$archive" || exit 1
 rm -f "$archive"
 printf '      source synced to %s\n' "$HOME"
