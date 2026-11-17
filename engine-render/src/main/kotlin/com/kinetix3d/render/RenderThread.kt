@@ -28,6 +28,9 @@ class RenderThread(
     @Volatile
     private var profile: DeviceCapabilityProfile? = null
 
+    @Volatile
+    private var sourcePath: String? = null
+
     private var lastTicket: RenderTicket? = null
 
     private var eglCore: EglCore? = null
@@ -44,6 +47,10 @@ class RenderThread(
     fun setProfile(profile: DeviceCapabilityProfile) {
         this.profile = profile
         requestRender()
+    }
+
+    fun setSourcePath(path: String?) {
+        sourcePath = path
     }
 
     fun setTicket(ticket: RenderTicket) {
@@ -111,7 +118,8 @@ class RenderThread(
         hasRenderedTicket = false
         Log.d(TAG, "EGL ready es3=${core.isEs3}")
         if (core.isEs3) {
-            val dag = DagRenderExecutor(fboPool)
+            val source = sourcePath?.let { MediaSource(it) } ?: ProceduralSource()
+            val dag = DagRenderExecutor(fboPool, source)
             if (dag.initialize()) {
                 executor = dag
             } else {

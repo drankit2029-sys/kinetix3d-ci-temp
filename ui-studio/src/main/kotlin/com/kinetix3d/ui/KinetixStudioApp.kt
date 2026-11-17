@@ -124,7 +124,7 @@ fun KinetixStudioApp(
                     )
                 }
                 Text(
-                    text = "LIVE RENDER — Tiles → ColorSuite → Blur",
+                    text = "4K MULTI-TILE — ColorSuite → Blur → Glow",
                     color = StudioMuted,
                     fontSize = 12.sp,
                 )

@@ -22,6 +22,7 @@ import com.kinetix3d.model.ParamChannel
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.model.TransientOverrideMap
 import kotlinx.collections.immutable.persistentMapOf
+import java.io.File
 
 class KinetixRenderView
     @JvmOverloads
@@ -35,6 +36,7 @@ class KinetixRenderView
         private var ticketPosted = false
 
         init {
+            renderThread.setSourcePath(findTestMedia())
             holder.addCallback(this)
             holder.setFormat(PixelFormat.RGBA_8888)
         }
@@ -70,7 +72,7 @@ class KinetixRenderView
 
         private fun postDemoTicket() {
             ticketPosted = true
-            val settings = CompSettings(width = 1920, height = 1080, fps = 60.0)
+            val settings = CompSettings(width = 3840, height = 2160, fps = 60.0)
             val state =
                 ProjectState(
                     projectId = "demo",
@@ -86,33 +88,35 @@ class KinetixRenderView
                     state = state,
                     overrides = TransientOverrideMap.EMPTY,
                     ptsUs = 0L,
-                    previewScale = 0.5f,
+                    previewScale = 1.0f,
                     generation = 1L,
                     graph = demoGraph(),
                 ),
             )
         }
 
+        private fun findTestMedia(): String? {
+            val directory = context.getExternalFilesDir(null) ?: return null
+            return listOf(
+                "kinetix-test.png",
+                "kinetix-test.jpg",
+                "kinetix-test.jpeg",
+                "kinetix-test.mp4",
+                "kinetix-test.mov",
+            ).map { File(directory, it) }
+                .firstOrNull { it.isFile }
+                ?.absolutePath
+        }
+
         private fun demoGraph(): NodeGraph {
             val base = NodeGraph.passthrough()
             val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
             val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
-            val tiles =
-                GraphNode(
-                    nodeId = "tiles",
-                    schemaId = "kinetix.tiles",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
-                    params =
-                        persistentMapOf(
-                            "gridX" to ParamChannel.constant(4f),
-                            "gridY" to ParamChannel.constant(4f),
-                        ),
-                )
             val color =
                 GraphNode(
                     nodeId = "color",
                     schemaId = "kinetix.color-suite",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(tiles.nodeId)),
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
                     params =
                         persistentMapOf(
                             "contrast" to ParamChannel.constant(1.15f),
@@ -125,17 +129,29 @@ class KinetixRenderView
                     nodeId = "blur",
                     schemaId = "kinetix.blur",
                     inputs = persistentMapOf("clipSource" to NodeInput.FromNode(color.nodeId)),
-                    params = persistentMapOf("radius" to ParamChannel.constant(0.08f)),
+                    params = persistentMapOf("radius" to ParamChannel.constant(0.02f)),
+                )
+            val glow =
+                GraphNode(
+                    nodeId = "glow",
+                    schemaId = "kinetix.glow",
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(blur.nodeId)),
+                    params =
+                        persistentMapOf(
+                            "threshold" to ParamChannel.constant(0.8f),
+                            "intensity" to ParamChannel.constant(0.4f),
+                            "radius" to ParamChannel.constant(0.03f),
+                        ),
                 )
             return base.copy(
                 nodes =
                     base.nodes
-                        .putting(tiles.nodeId, tiles)
                         .putting(color.nodeId, color)
                         .putting(blur.nodeId, blur)
+                        .putting(glow.nodeId, glow)
                         .putting(
                             output.nodeId,
-                            output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(blur.nodeId))),
+                            output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(glow.nodeId))),
                         ),
             )
         }

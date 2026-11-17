@@ -60,7 +60,12 @@ class DagRenderPlanner(
                     }
 
                     is TilingCapability.LocalNeighborhood -> {
-                        val radiusPx = tiling.radius * height
+                        val actualRadius =
+                            node.params["radius"]
+                                ?.value
+                                ?.let { minOf(it, tiling.radius) }
+                                ?: tiling.radius
+                        val radiusPx = actualRadius * height
                         val expanded = upstreamDoD.expand(radiusPx)
                         Triple(expanded, expanded, false)
                     }

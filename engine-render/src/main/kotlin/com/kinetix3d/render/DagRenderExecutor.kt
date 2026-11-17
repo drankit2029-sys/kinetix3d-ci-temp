@@ -16,19 +16,21 @@ import com.kinetix3d.render.plan.TilePlan
 
 class DagRenderExecutor(
     private val pool: ReferenceCountedFboPool,
+    private val source: SourceTexture = ProceduralSource(),
 ) : AutoCloseable {
-    private val source = ProceduralSource()
     private val passThrough = PassThroughKernel()
     private val colorSuite = ColorSuiteKernel()
     private val blur = BlurKernel()
     private val tiles = TilesKernel()
+    private val glow = GlowKernel()
 
     fun initialize(): Boolean =
         source.initialize() &&
             passThrough.initialize() &&
             colorSuite.initialize() &&
             blur.initialize() &&
-            tiles.initialize()
+            tiles.initialize() &&
+            glow.initialize()
 
     fun render(
         plan: RenderPlan,
@@ -162,6 +164,31 @@ class DagRenderExecutor(
                         checkGl("blur")
                     }
 
+                    "kinetix.glow" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        val ok =
+                            glow.render(
+                                inputTexture = currentTexture,
+                                outputFramebuffer = out.framebufferId,
+                                pool = pool,
+                                width = roiWidth,
+                                height = roiHeight,
+                                threshold = param(graph, pass.nodeId, "threshold", 0.8f),
+                                intensity = param(graph, pass.nodeId, "intensity", 1f),
+                                radiusPx = param(graph, pass.nodeId, "radius", 0.03f) * viewportHeight,
+                            )
+                        if (!ok) {
+                            pool.release(out)
+                            currentHandle?.let { pool.release(it) }
+                            return false
+                        }
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("glow")
+                    }
+
                     else -> {
                         Unit
                     }
@@ -232,6 +259,7 @@ class DagRenderExecutor(
         colorSuite.release()
         blur.release()
         tiles.release()
+        glow.release()
         source.release()
     }
 

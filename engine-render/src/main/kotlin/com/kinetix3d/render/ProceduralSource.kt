@@ -9,11 +9,11 @@ import android.opengl.GLES20
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class ProceduralSource {
-    var textureId = 0
+class ProceduralSource : SourceTexture {
+    override var textureId = 0
         private set
 
-    fun initialize(): Boolean {
+    override fun initialize(): Boolean {
         val size = SIZE
         val pixels = ByteBuffer.allocateDirect(size * size * 4).order(ByteOrder.nativeOrder())
         for (y in 0 until size) {
@@ -54,7 +54,7 @@ class ProceduralSource {
         return true
     }
 
-    fun release() {
+    override fun release() {
         if (textureId != 0) {
             GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
             textureId = 0
