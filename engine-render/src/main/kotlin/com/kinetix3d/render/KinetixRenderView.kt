@@ -14,6 +14,11 @@ import android.view.SurfaceView
 import com.kinetix3d.model.CompSettings
 import com.kinetix3d.model.CompositionGraph
 import com.kinetix3d.model.DeviceCapabilityProfile
+import com.kinetix3d.model.GraphNode
+import com.kinetix3d.model.NodeGraph
+import com.kinetix3d.model.NodeInput
+import com.kinetix3d.model.NodeSchemaIds
+import com.kinetix3d.model.ParamChannel
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.model.TransientOverrideMap
 import kotlinx.collections.immutable.persistentMapOf
@@ -83,7 +88,43 @@ class KinetixRenderView
                     ptsUs = 0L,
                     previewScale = 0.5f,
                     generation = 1L,
+                    graph = demoGraph(),
                 ),
+            )
+        }
+
+        private fun demoGraph(): NodeGraph {
+            val base = NodeGraph.passthrough()
+            val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
+            val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
+            val color =
+                GraphNode(
+                    nodeId = "color",
+                    schemaId = "kinetix.color-suite",
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
+                    params =
+                        persistentMapOf(
+                            "contrast" to ParamChannel.constant(1.15f),
+                            "saturation" to ParamChannel.constant(1.3f),
+                            "temperature" to ParamChannel.constant(0.1f),
+                        ),
+                )
+            val blur =
+                GraphNode(
+                    nodeId = "blur",
+                    schemaId = "kinetix.blur",
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(color.nodeId)),
+                    params = persistentMapOf("radius" to ParamChannel.constant(0.08f)),
+                )
+            return base.copy(
+                nodes =
+                    base.nodes
+                        .putting(color.nodeId, color)
+                        .putting(blur.nodeId, blur)
+                        .putting(
+                            output.nodeId,
+                            output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(blur.nodeId))),
+                        ),
             )
         }
     }

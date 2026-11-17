@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.Surface
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
-import com.kinetix3d.model.NodeGraph
 import com.kinetix3d.render.plan.DagRenderPlanner
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
@@ -29,14 +28,18 @@ class RenderThread(
     @Volatile
     private var profile: DeviceCapabilityProfile? = null
 
+    private var lastTicket: RenderTicket? = null
+
     private var eglCore: EglCore? = null
     private var renderer: TestPatternRenderer? = null
+    private var executor: DagRenderExecutor? = null
     private var pool: ReferenceCountedFboPool? = null
     private var surface: Surface? = null
     private var width = 1
     private var height = 1
     private var generation = 0L
     private var lastFrameNanos = 0L
+    private var hasRenderedTicket = false
 
     fun setProfile(profile: DeviceCapabilityProfile) {
         this.profile = profile
@@ -44,6 +47,7 @@ class RenderThread(
     }
 
     fun setTicket(ticket: RenderTicket) {
+        lastTicket = ticket
         pendingTicket.set(ticket)
         requestRender()
     }
@@ -62,6 +66,7 @@ class RenderThread(
         handler.post {
             this.width = width.coerceAtLeast(1)
             this.height = height.coerceAtLeast(1)
+            lastTicket?.let { pendingTicket.set(it) }
             requestRender()
         }
     }
@@ -99,9 +104,23 @@ class RenderThread(
             return
         }
         val budgetMb = profile?.safeVramBudgetMb ?: DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB
+        val fboPool = ReferenceCountedFboPool(budgetMb.toLong() * 1024L * 1024L)
         eglCore = core
         renderer = pattern
-        pool = ReferenceCountedFboPool(budgetMb.toLong() * 1024L * 1024L)
+        pool = fboPool
+        hasRenderedTicket = false
+        Log.d(TAG, "EGL ready es3=${core.isEs3}")
+        if (core.isEs3) {
+            val dag = DagRenderExecutor(fboPool)
+            if (dag.initialize()) {
+                executor = dag
+            } else {
+                Log.e(TAG, "DAG executor initialization failed; using test pattern")
+                dag.close()
+            }
+        } else {
+            Log.w(TAG, "ES2 context; DAG executor disabled")
+        }
         renderFrame()
     }
 
@@ -116,7 +135,7 @@ class RenderThread(
             val plan =
                 runCatching {
                     planner.plan(
-                        graph = NodeGraph.passthrough(),
+                        graph = ticket.graph,
                         comp = ticket.state.activeComposition().settings,
                         previewScale = ticket.previewScale,
                         profile = profile ?: DeviceCapabilityProfile.tier2Default(),
@@ -128,8 +147,17 @@ class RenderThread(
                     "plan tiles=${plan.tiles.size} format=${plan.format} " +
                         "reduced=${plan.reducedResolution} budget=${plan.budgetBytes}",
                 )
+                val rendered = executor?.render(plan, ticket.graph, width, height) ?: false
+                Log.d(TAG, "executor rendered=$rendered")
+                if (rendered && core.swapBuffers()) {
+                    hasRenderedTicket = true
+                    runCatching { renderLock.clearAfterSwap() }
+                    return
+                }
             }
         }
+
+        if (hasRenderedTicket) return
 
         val now = System.nanoTime()
         val timeSeconds =
@@ -150,6 +178,8 @@ class RenderThread(
     }
 
     private fun releaseGl() {
+        executor?.close()
+        executor = null
         renderer?.release()
         renderer = null
         pool?.close()

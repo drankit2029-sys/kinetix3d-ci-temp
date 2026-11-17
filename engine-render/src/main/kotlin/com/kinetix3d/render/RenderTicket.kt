@@ -5,6 +5,7 @@
 
 package com.kinetix3d.render
 
+import com.kinetix3d.model.NodeGraph
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.model.TransientOverrideMap
 
@@ -14,4 +15,5 @@ data class RenderTicket(
     val ptsUs: Long,
     val previewScale: Float,
     val generation: Long,
+    val graph: NodeGraph = NodeGraph.passthrough(),
 )

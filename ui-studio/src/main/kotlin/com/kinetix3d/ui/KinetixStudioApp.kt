@@ -124,7 +124,7 @@ fun KinetixStudioApp(
                     )
                 }
                 Text(
-                    text = "LIVE RENDER — Phase 2 test pattern",
+                    text = "LIVE RENDER — ColorSuite → Blur",
                     color = StudioMuted,
                     fontSize = 12.sp,
                 )
