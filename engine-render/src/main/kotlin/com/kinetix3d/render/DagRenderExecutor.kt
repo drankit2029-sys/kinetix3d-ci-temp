@@ -21,12 +21,14 @@ class DagRenderExecutor(
     private val passThrough = PassThroughKernel()
     private val colorSuite = ColorSuiteKernel()
     private val blur = BlurKernel()
+    private val tiles = TilesKernel()
 
     fun initialize(): Boolean =
         source.initialize() &&
             passThrough.initialize() &&
             colorSuite.initialize() &&
-            blur.initialize()
+            blur.initialize() &&
+            tiles.initialize()
 
     fun render(
         plan: RenderPlan,
@@ -45,18 +47,19 @@ class DagRenderExecutor(
                 .toInt()
                 .coerceAtLeast(1)
         for (tile in plan.tiles) {
-            val tileWidth =
-                tile.output.width
+            val roi = tile.requiredRoI
+            val roiWidth =
+                roi.width
                     .toInt()
                     .coerceAtLeast(1)
-            val tileHeight =
-                tile.output.height
+            val roiHeight =
+                roi.height
                     .toInt()
                     .coerceAtLeast(1)
-            val offsetX = tile.output.left / viewportWidth
-            val offsetY = tile.output.top / viewportHeight
-            val scaleX = tileWidth.toFloat() / viewportWidth
-            val scaleY = tileHeight.toFloat() / viewportHeight
+            val offsetX = roi.left / viewportWidth
+            val offsetY = roi.top / viewportHeight
+            val scaleX = roiWidth.toFloat() / viewportWidth
+            val scaleY = roiHeight.toFloat() / viewportHeight
             var currentFramebuffer = 0
             var currentTexture = source.textureId
             var currentHandle: ReferenceCountedFboPool.Handle? = null
@@ -64,12 +67,12 @@ class DagRenderExecutor(
             for (pass in plan.passes) {
                 when (pass.schemaId) {
                     NodeSchemaIds.GROUP_INPUT -> {
-                        val out = pool.acquire(tileWidth, tileHeight) ?: return false
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         passThrough.render(
                             inputTexture = source.textureId,
                             outputFramebuffer = out.framebufferId,
-                            width = tileWidth,
-                            height = tileHeight,
+                            width = roiWidth,
+                            height = roiHeight,
                             tileOffsetX = offsetX,
                             tileOffsetY = offsetY,
                             tileScaleX = scaleX,
@@ -97,12 +100,12 @@ class DagRenderExecutor(
                     }
 
                     "kinetix.color-suite" -> {
-                        val out = pool.acquire(tileWidth, tileHeight) ?: return false
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         colorSuite.render(
                             inputTexture = currentTexture,
                             outputFramebuffer = out.framebufferId,
-                            width = tileWidth,
-                            height = tileHeight,
+                            width = roiWidth,
+                            height = roiHeight,
                             tileOffsetX = 0f,
                             tileOffsetY = 0f,
                             tileScaleX = 1f,
@@ -118,16 +121,33 @@ class DagRenderExecutor(
                         checkGl("color-suite")
                     }
 
+                    "kinetix.tiles" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        tiles.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            gridX = param(graph, pass.nodeId, "gridX", 3f),
+                            gridY = param(graph, pass.nodeId, "gridY", 3f),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("tiles")
+                    }
+
                     "kinetix.blur" -> {
-                        val out = pool.acquire(tileWidth, tileHeight) ?: return false
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         val radiusPx = param(graph, pass.nodeId, "radius", 0.02f) * viewportHeight
                         val ok =
                             blur.render(
                                 inputTexture = currentTexture,
                                 outputFramebuffer = out.framebufferId,
                                 pool = pool,
-                                width = tileWidth,
-                                height = tileHeight,
+                                width = roiWidth,
+                                height = roiHeight,
                                 radiusPx = radiusPx,
                             )
                         if (!ok) {
@@ -184,21 +204,18 @@ class DagRenderExecutor(
         val dstY0 = (tile.output.top * scaleY).toInt()
         val dstX1 = (tile.output.right * scaleX).toInt()
         val dstY1 = (tile.output.bottom * scaleY).toInt()
-        val tileWidth =
-            tile.output.width
-                .toInt()
-                .coerceAtLeast(1)
-        val tileHeight =
-            tile.output.height
-                .toInt()
-                .coerceAtLeast(1)
+        val roi = tile.requiredRoI
+        val sourceX0 = (tile.output.left - roi.left).toInt().coerceAtLeast(0)
+        val sourceY0 = (tile.output.top - roi.top).toInt().coerceAtLeast(0)
+        val sourceX1 = (sourceX0 + tile.output.width.toInt()).coerceAtMost(roi.width.toInt())
+        val sourceY1 = (sourceY0 + tile.output.height.toInt()).coerceAtMost(roi.height.toInt())
         GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, framebuffer)
         GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, 0)
         GLES30.glBlitFramebuffer(
-            0,
-            0,
-            tileWidth,
-            tileHeight,
+            sourceX0,
+            sourceY0,
+            sourceX1,
+            sourceY1,
             dstX0,
             dstY0,
             dstX1,
@@ -214,6 +231,7 @@ class DagRenderExecutor(
         passThrough.release()
         colorSuite.release()
         blur.release()
+        tiles.release()
         source.release()
     }
 

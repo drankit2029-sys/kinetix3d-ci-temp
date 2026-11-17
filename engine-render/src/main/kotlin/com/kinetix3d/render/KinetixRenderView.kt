@@ -97,11 +97,22 @@ class KinetixRenderView
             val base = NodeGraph.passthrough()
             val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
             val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
+            val tiles =
+                GraphNode(
+                    nodeId = "tiles",
+                    schemaId = "kinetix.tiles",
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
+                    params =
+                        persistentMapOf(
+                            "gridX" to ParamChannel.constant(4f),
+                            "gridY" to ParamChannel.constant(4f),
+                        ),
+                )
             val color =
                 GraphNode(
                     nodeId = "color",
                     schemaId = "kinetix.color-suite",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
+                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(tiles.nodeId)),
                     params =
                         persistentMapOf(
                             "contrast" to ParamChannel.constant(1.15f),
@@ -119,6 +130,7 @@ class KinetixRenderView
             return base.copy(
                 nodes =
                     base.nodes
+                        .putting(tiles.nodeId, tiles)
                         .putting(color.nodeId, color)
                         .putting(blur.nodeId, blur)
                         .putting(
