@@ -213,6 +213,9 @@ class DeviceCapabilityProfileTest {
                         VideoMime.H264 to MaxResFps(1920, 1080, 30.0),
                     ),
                 glRenderer = "Mali-G68 MC4",
+                glesMajor = 3,
+                glesMinor = 2,
+                largeMemoryClassMb = 512,
             )
 
         val decoded =
@@ -227,6 +230,24 @@ class DeviceCapabilityProfileTest {
         assertTrue(VideoMime.AV1 in decoded.decodeMatrix)
         assertTrue(VideoMime.AV1 !in decoded.encodeMatrix)
         assertEquals("Mali-G68 MC4", decoded.glRenderer)
+        assertEquals(3, decoded.glesMajor)
+        assertEquals(2, decoded.glesMinor)
+        assertEquals(512, decoded.largeMemoryClassMb)
+        assertTrue(decoded.supportsGles32)
+        assertTrue(decoded.supportsCompute)
+    }
+
+    @Test
+    fun `gles capability flags follow the reported version`() {
+        val es30 = DeviceCapabilityProfile.tier2Default().copy(glesMajor = 3, glesMinor = 0)
+        assertEquals(false, es30.supportsGles32)
+        assertEquals(false, es30.supportsCompute)
+        val es31 = es30.copy(glesMinor = 1)
+        assertEquals(false, es31.supportsGles32)
+        assertEquals(true, es31.supportsCompute)
+        val es32 = es30.copy(glesMinor = 2)
+        assertEquals(true, es32.supportsGles32)
+        assertEquals(true, es32.supportsCompute)
     }
 
     @Test
@@ -237,6 +258,9 @@ class DeviceCapabilityProfileTest {
         assertEquals(false, fallback.supportsAhbZeroCopy)
         assertEquals(DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB, fallback.safeVramBudgetMb)
         assertEquals(24, DeviceCapabilityProfile.TIER2_VRAM_BUDGET_MB)
+        assertEquals(3, fallback.glesMajor)
+        assertEquals(0, fallback.glesMinor)
+        assertEquals(false, fallback.supportsGles32)
     }
 
     @Test

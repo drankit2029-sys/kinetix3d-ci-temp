@@ -65,7 +65,7 @@ class KinetixApplication : Application() {
 
         appScope.launch {
             inspectRenderGuard()
-            if (cachedProfile == null) {
+            if (cachedProfile == null || cachedProfile.approximate) {
                 val probedProfile = profiler.runFirstBootBenchmark()
                 if (probedProfile != mutableDeviceProfile.value) {
                     mutableDeviceProfile.value = probedProfile

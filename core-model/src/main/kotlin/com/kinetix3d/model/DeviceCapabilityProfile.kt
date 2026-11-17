@@ -85,8 +85,21 @@ data class DeviceCapabilityProfile(
     val encodeMatrix: Map<VideoMime, MaxResFps> = emptyMap(),
     /** `GL_RENDERER` captured by the Stage-3 probe; consumers must never re-create EGL to read it. */
     val glRenderer: String? = null,
+    /** GLES major/minor reported by the probe context; 3.0 is the conservative fallback. */
+    val glesMajor: Int = 3,
+    val glesMinor: Int = 0,
+    /** `ActivityManager.largeMemoryClass` in MB; 0 when the memory probe failed. */
+    val largeMemoryClassMb: Int = 0,
     val approximate: Boolean = false,
 ) {
+    /** ES 3.2 is required for compute-heavy paths and `glBlendFuncSeparatei` WBOIT. */
+    val supportsGles32: Boolean
+        get() = glesMajor > 3 || (glesMajor == 3 && glesMinor >= 2)
+
+    /** ES 3.1+ compute shaders; ES 3.0 devices use the vertex/fragment fallbacks. */
+    val supportsCompute: Boolean
+        get() = glesMajor > 3 || (glesMajor == 3 && glesMinor >= 1)
+
     companion object {
         /** Conservative fallback persisted when any probe stage fails (never fail first boot). */
         fun tier2Default(approximate: Boolean = true): DeviceCapabilityProfile =
@@ -109,6 +122,9 @@ data class DeviceCapabilityProfile(
                         VideoMime.H264 to MaxResFps(1920, 1080, 30.0),
                         VideoMime.HEVC to MaxResFps(1920, 1080, 30.0),
                     ),
+                glesMajor = 3,
+                glesMinor = 0,
+                largeMemoryClassMb = 0,
                 approximate = approximate,
             )
 

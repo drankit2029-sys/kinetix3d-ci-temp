@@ -145,7 +145,7 @@ class HardwareCapabilityProfiler(
                 probeMemory()
             } catch (throwable: Throwable) {
                 Log.w(TAG, "Stage 4 (memory) probe failed", throwable)
-                MemoryProbeResult(totalMemMb = 0, lowRam = false, approximate = true)
+                MemoryProbeResult(totalMemMb = 0, lowRam = false, largeMemoryClassMb = 0, approximate = true)
             }
         if (memory.approximate) approximate = true
 
@@ -188,6 +188,9 @@ class HardwareCapabilityProfiler(
                 encodeMatrix = codecProbe.encode,
                 approximate = approximate,
                 glRenderer = gles.renderer,
+                glesMajor = gles.major,
+                glesMinor = gles.minor,
+                largeMemoryClassMb = memory.largeMemoryClassMb,
             )
         return ProbeResult(profile, gles.renderer, gles.version)
     }
@@ -370,6 +373,8 @@ class HardwareCapabilityProfiler(
                 maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
                 renderer = null,
                 version = null,
+                major = 3,
+                minor = 0,
                 approximate = true,
             )
         return try {
@@ -380,6 +385,7 @@ class HardwareCapabilityProfiler(
                     extension == "GL_EXT_color_buffer_float" || extension == "GL_EXT_color_buffer_half_float"
                 }
             val reportedTextureSize = gles.maxTextureSize
+            val (major, minor) = parseGlesVersion(gles.version)
             GlesProbeResult(
                 supportsRgba16f = supportsRgba16f,
                 maxTextureSize =
@@ -390,10 +396,21 @@ class HardwareCapabilityProfiler(
                     },
                 renderer = gles.renderer,
                 version = gles.version,
+                major = major,
+                minor = minor,
                 approximate = reportedTextureSize <= 0,
             )
         } finally {
             gles.close()
+        }
+    }
+
+    private fun parseGlesVersion(version: String?): Pair<Int, Int> {
+        val match = GLES_VERSION_REGEX.find(version.orEmpty())
+        return if (match != null) {
+            (match.groupValues[1].toIntOrNull() ?: 3) to (match.groupValues[2].toIntOrNull() ?: 0)
+        } else {
+            3 to 0
         }
     }
 
@@ -426,7 +443,7 @@ class HardwareCapabilityProfiler(
     private fun probeMemory(): MemoryProbeResult {
         val activityManager = appContext.getSystemService(ActivityManager::class.java)
         if (activityManager == null) {
-            return MemoryProbeResult(totalMemMb = 0, lowRam = false, approximate = true)
+            return MemoryProbeResult(totalMemMb = 0, lowRam = false, largeMemoryClassMb = 0, approximate = true)
         }
         val memoryInfo = ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memoryInfo)
@@ -434,6 +451,7 @@ class HardwareCapabilityProfiler(
         return MemoryProbeResult(
             totalMemMb = totalMemMb,
             lowRam = activityManager.isLowRamDevice,
+            largeMemoryClassMb = activityManager.largeMemoryClass,
             approximate = totalMemMb <= 0,
         )
     }
@@ -509,12 +527,15 @@ class HardwareCapabilityProfiler(
         val maxTextureSize: Int,
         val renderer: String?,
         val version: String?,
+        val major: Int,
+        val minor: Int,
         val approximate: Boolean,
     )
 
     private data class MemoryProbeResult(
         val totalMemMb: Int,
         val lowRam: Boolean,
+        val largeMemoryClassMb: Int,
         val approximate: Boolean,
     )
 
@@ -523,7 +544,7 @@ class HardwareCapabilityProfiler(
         const val PROBE_THREAD_NAME = "kinetix-hw-probe"
         const val PROFILE_FILE_NAME = "device_profile.pb"
         const val SIDECAR_FILE_NAME = "device_profile.key"
-        const val CACHE_SCHEMA_VERSION = 2
+        const val CACHE_SCHEMA_VERSION = 3
         const val KEY_SCHEMA = "schema"
         const val KEY_DEVICE = "deviceKey"
         const val KEY_GL_DEVICE = "glKey"
@@ -545,6 +566,8 @@ class HardwareCapabilityProfiler(
         const val TIER1_MIN_MEMORY_MB = 8 * 1024
         const val TIER1_MIN_DECODERS = 6
         const val TIER3_MAX_MEMORY_MB = 4 * 1024
+
+        val GLES_VERSION_REGEX = Regex("""OpenGL ES (\d+)\.(\d+)""")
 
         val CANDIDATE_RESOLUTIONS =
             listOf(

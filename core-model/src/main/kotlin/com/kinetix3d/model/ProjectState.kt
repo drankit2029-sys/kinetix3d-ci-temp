@@ -335,7 +335,7 @@ data class MediaAssetDescriptor(
     val sizeBytes: Long,
     val kind: AssetKind,
     /** Heuristic re-link fingerprint (positioned head/mid/tail reads), never a content hash. */
-    val fingerprint: String? = null,
+    val fastFingerprint: String? = null,
     val durationUs: Long = 0L,
     val width: Int = 0,
     val height: Int = 0,

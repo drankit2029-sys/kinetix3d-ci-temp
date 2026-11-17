@@ -701,7 +701,7 @@ object KinetixOperatorCatalog {
                 ),
             params =
                 listOf(
-                    ParamSpec.IntParam("echoCount", "Echo Count", default = 3, min = 1, max = 16),
+                    ParamSpec.IntParam("echoCount", "Echo Count", default = 3, min = 1, max = 32),
                     ParamSpec.FloatParam(
                         "stepSeconds",
                         "Step",
@@ -824,7 +824,8 @@ object KinetixOperatorCatalog {
             params =
                 listOf(
                     ParamSpec.SplineVerticesParam("path", "Path", maxVertices = 256, closed = true),
-                    ParamSpec.FloatParam("progress", "Progress", default = 0f),
+                    ParamSpec.FloatParam("progress", "Progress", default = 0f, min = -10f, max = 10f, step = 0.001f),
+                    ParamSpec.IntParam("loopMode", "Loop Mode", default = 0, min = 0, max = 3),
                     ParamSpec.BoolParam("orientToPath", "Orient to Path", default = true),
                 ),
             tiling = TilingCapability.CoordinateRemap,
