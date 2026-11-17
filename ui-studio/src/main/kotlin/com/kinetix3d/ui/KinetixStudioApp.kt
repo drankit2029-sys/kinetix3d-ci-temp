@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -33,10 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
+import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -102,6 +107,27 @@ fun KinetixStudioApp(
                     text = "Day 1 — multi-module foundation",
                     color = StudioAccent,
                     fontSize = 14.sp,
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black),
+                ) {
+                    AndroidView(
+                        factory = { context -> KinetixRenderView(context) },
+                        update = { view ->
+                            view.setDeviceProfile(deviceProfile ?: DeviceCapabilityProfile.tier2Default())
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                Text(
+                    text = "LIVE RENDER — Phase 2 test pattern",
+                    color = StudioMuted,
+                    fontSize = 12.sp,
                 )
                 SectionLabel(
                     text = "DEVICE",
