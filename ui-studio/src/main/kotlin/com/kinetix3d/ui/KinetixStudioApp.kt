@@ -113,8 +113,7 @@ fun KinetixStudioApp(
                         Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Black),
+                            .clip(RoundedCornerShape(12.dp)),
                 ) {
                     AndroidView(
                         factory = { context -> KinetixRenderView(context) },

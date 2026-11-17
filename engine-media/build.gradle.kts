@@ -21,6 +21,15 @@ android {
         lintConfig = file("$rootDir/lint.xml")
     }
 
+    // The Rust release profile already strips symbols. On ARM Termux hosts the
+    // NDK's llvm-objcopy is an x86_64 binary, so AGP's strip task must not touch
+    // libkinetix_audio.so.
+    packaging {
+        jniLibs {
+            keepDebugSymbols += "**/libkinetix_audio.so"
+        }
+    }
+
     // Generated Rust .so files land in build/ (never src/) and are merged by
     // AGP's native-libs tasks.
     sourceSets {

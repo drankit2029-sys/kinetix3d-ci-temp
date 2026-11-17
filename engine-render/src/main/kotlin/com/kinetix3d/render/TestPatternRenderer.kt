@@ -15,6 +15,7 @@ import java.nio.FloatBuffer
 
 class TestPatternRenderer {
     private var program = 0
+    private var vertexBufferId = 0
     private var positionLocation = -1
     private var timeLocation = -1
     private var resolutionLocation = -1
@@ -50,7 +51,18 @@ class TestPatternRenderer {
         positionLocation = GLES20.glGetAttribLocation(program, "aPosition")
         timeLocation = GLES20.glGetUniformLocation(program, "uTime")
         resolutionLocation = GLES20.glGetUniformLocation(program, "uResolution")
-        return positionLocation >= 0
+        val buffers = IntArray(1)
+        GLES20.glGenBuffers(1, buffers, 0)
+        vertexBufferId = buffers[0]
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId)
+        GLES20.glBufferData(
+            GLES20.GL_ARRAY_BUFFER,
+            VERTICES.size * Float.SIZE_BYTES,
+            vertexBuffer,
+            GLES20.GL_STATIC_DRAW,
+        )
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+        return positionLocation >= 0 && vertexBufferId != 0
     }
 
     fun drawToWindow(
@@ -74,7 +86,8 @@ class TestPatternRenderer {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, handle.framebufferId)
         GLES20.glViewport(0, 0, width, height)
         draw(width, height, timeSeconds)
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, handle.framebufferId)
+        GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, 0)
         GLES20.glViewport(0, 0, width, height)
         GLES30.glBlitFramebuffer(
             0,
@@ -88,11 +101,21 @@ class TestPatternRenderer {
             GLES20.GL_COLOR_BUFFER_BIT,
             GLES20.GL_NEAREST,
         )
+        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0)
+        GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, 0)
+        val error = GLES20.glGetError()
+        if (error != GLES20.GL_NO_ERROR) {
+            Log.w(TAG, "GL error after blit: 0x${Integer.toHexString(error)}")
+        }
         pool.release(handle)
         return true
     }
 
     fun release() {
+        if (vertexBufferId != 0) {
+            GLES20.glDeleteBuffers(1, intArrayOf(vertexBufferId), 0)
+            vertexBufferId = 0
+        }
         if (program != 0) {
             GLES20.glDeleteProgram(program)
             program = 0
@@ -107,10 +130,12 @@ class TestPatternRenderer {
         GLES20.glUseProgram(program)
         GLES20.glUniform1f(timeLocation, timeSeconds)
         GLES20.glUniform2f(resolutionLocation, width.toFloat(), height.toFloat())
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId)
         GLES20.glEnableVertexAttribArray(positionLocation)
-        GLES20.glVertexAttribPointer(positionLocation, 2, GLES20.GL_FLOAT, false, 0, vertexBuffer)
+        GLES20.glVertexAttribPointer(positionLocation, 2, GLES20.GL_FLOAT, false, 0, 0)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         GLES20.glDisableVertexAttribArray(positionLocation)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
     }
 
     private fun compile(
