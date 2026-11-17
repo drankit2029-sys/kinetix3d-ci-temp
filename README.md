@@ -59,9 +59,10 @@ Manifests request only permissions paired with shipped features. Phase 1 ships
 with `maxSdkVersion="28"` (API ≤ 28 `DIRECTORY_MOVIES` export fallback; MediaStore
 `IS_PENDING` on 29+ needs none). A merged-in `READ_EXTERNAL_STORAGE` with no
 Phase-1 feature was stripped with a `tools:node="remove"` merger marker; it returns
-(API 26–32) together with Phase 3 media import. `androidx.media3-exoplayer` injects
-`ACCESS_NETWORK_STATE` + `WAKE_LOCK` (normal install-time, no prompt) — accepted as a
-dependency contract.
+(API 26–32) together with Phase 3 media import. `media3-common` (still pulled in by
+`media3-extractor` for container demuxing) merges `ACCESS_NETWORK_STATE`; it is
+stripped with the same `tools:node="remove"` marker because the compositor path
+never opens a network stream.
 Add any further permission only together with the feature that needs it
 (`INTERNET` for v1.5+ local transfer, `RECORD_AUDIO` for the Phase 3 voiceover
 recorder, `READ_MEDIA_*`/legacy `READ_EXTERNAL_STORAGE` for Phase 3 import,
@@ -71,6 +72,8 @@ were removed deliberately; re-add only when a feature requires them.
 
 ## Status
 
-Day 1 — repository structure, Gradle setup & CI/CD pipeline complete and verified
-on device (SM-M366B, Android 17). Phase 1 (OS API boundary, hardware profiler,
-immutable state, math core) is next — see the roadmap, §2.
+Repository structure, Gradle setup and CI/CD pipeline are complete and verified on
+device (SM-M366B, Android 17). Phase 1 — OS API boundary (`PlatformApi` + seven
+managers), first-boot hardware profiler, immutable project model/WAL, math core and
+the Rust JNI chain — is complete. Phase 2 (OpenGL ES 3.2 render engine) is next —
+see the roadmap, §3.

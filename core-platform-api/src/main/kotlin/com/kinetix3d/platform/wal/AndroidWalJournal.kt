@@ -35,9 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * scopes the file to `kinetix_wal_<sha256(projectId).take(16)>.db`, so switching
  * projects cannot replay another project's mutations.
  *
- * Sequence ids are cached in memory (`MAX(seq_id) + 1` at open, incremented per
- * insert) and never renumbered, so replay `seq_id > lastAppliedSeq` stays stable
- * across checkpoints.
+ * Sequence ids are cached in memory (`max(MAX(seq_id), last_applied_seq) + 1` at
+ * open, incremented per insert) and never renumbered or reused, so replay
+ * `seq_id > lastAppliedSeq` stays stable across checkpoints.
  *
  * Corrupt payloads fail loudly with [IllegalStateException] carrying the row's
  * seq id: silently skipping a mutation would silently fork project state.
@@ -77,7 +77,9 @@ class AndroidWalJournal(
                             put(COLUMN_TIMESTAMP_MS, timestampMs)
                             put(COLUMN_MUTATION_PROTO, payload)
                         }
-                    val conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE
+                    // Sequence ids are never reused, so a conflict means corrupted state:
+                    // fail loudly instead of overwriting a surviving mutation.
+                    val conflictAlgorithm = SQLiteDatabase.CONFLICT_ABORT
                     val inserted = db.insert(TABLE_MUTATIONS, conflictAlgorithm, values)
                     check(inserted != -1L) { "Failed to append WAL mutation at seq_id=$seqId" }
                     nextSeqIdCache = seqId + 1L
@@ -224,14 +226,26 @@ class AndroidWalJournal(
         return db
     }
 
-    private fun queryNextSeqId(db: SupportSQLiteDatabase): Long =
-        db.query("SELECT MAX($COLUMN_SEQ_ID) FROM $TABLE_MUTATIONS").use { cursor ->
-            if (cursor.moveToFirst() && !cursor.isNull(0)) {
-                cursor.getLong(0) + 1L
-            } else {
-                1L
+    /**
+     * [checkpoint] may prune every applied row, so `MAX(seq_id) + 1` alone would
+     * restart ids at 1 after a process death while `last_applied_seq` remains high.
+     * Those mutations would then land at or below the replay watermark and never
+     * be replayed. Tracking the watermark keeps ids strictly increasing forever.
+     */
+    private fun queryNextSeqId(db: SupportSQLiteDatabase): Long {
+        val highestStored =
+            db.query("SELECT MAX($COLUMN_SEQ_ID) FROM $TABLE_MUTATIONS").use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L
             }
-        }
+        val lastApplied =
+            db
+                .query(
+                    "SELECT $COLUMN_LAST_APPLIED FROM $TABLE_WAL_STATE WHERE $COLUMN_ID = 1",
+                ).use { cursor ->
+                    if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L
+                }
+        return maxOf(highestStored, lastApplied) + 1L
+    }
 
     private class JournalOpenCallback : SupportSQLiteOpenHelper.Callback(SCHEMA_VERSION) {
         override fun onCreate(db: SupportSQLiteDatabase) {

@@ -61,7 +61,7 @@ object AnalyticalSpringSolver {
     }
 
     /**
-     * Seconds for the spring envelope to decay to 0.1% of the initial displacement.
+     * Seconds for the spring envelope to decay to 0.01% of the initial displacement.
      * Keyframe easing uses this to fit a visible spring inside one segment while
      * still landing on the target keyframe value.
      */

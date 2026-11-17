@@ -310,7 +310,10 @@ cd \$HOME
 # Remove stale module sources before extracting: renamed/deleted .kt/.rs files
 # would otherwise survive and cause Duplicate Class / Redeclaration errors.
 if [ -d '$PROJECT_DIR_NAME' ]; then
-    find '$PROJECT_DIR_NAME' -mindepth 2 -maxdepth 2 -type d -name src -exec rm -rf {} +
+    # Nested source roots (engine-media/rust/src) sit deeper than a module's src/.
+    find '$PROJECT_DIR_NAME' \
+        -type d \( -name build -o -name target -o -name .git \) -prune -o \
+        -type d -name src -prune -exec rm -rf {} +
 fi
 tar -xzf '$STAGE/$PROJECT-sync.tar.gz'
 cd '$PROJECT_DIR_NAME'
@@ -359,7 +362,10 @@ cd "$HOME"
 # Remove stale module sources before extracting: renamed/deleted .kt/.rs files
 # would otherwise survive and cause Duplicate Class / Redeclaration errors.
 if [ -d "$project" ]; then
-    find "$project" -mindepth 2 -maxdepth 2 -type d -name src -exec rm -rf {} +
+    # Nested source roots (engine-media/rust/src) sit deeper than a module's src/.
+    find "$project" \
+        -type d \( -name build -o -name target -o -name .git \) -prune -o \
+        -type d -name src -prune -exec rm -rf {} +
 fi
 tar -xzf "$archive"
 cd "$project"
