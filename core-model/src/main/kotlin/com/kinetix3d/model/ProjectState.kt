@@ -20,10 +20,29 @@ import kotlinx.serialization.Serializable
 // ---------------------------------------------------------------------------
 
 @Serializable
-enum class ColorPrimaries { REC709, REC2020, ACES_AP0 }
+enum class ColorPrimaries {
+    REC709,
+    REC2020,
+
+    /** ACES 2065-1 archival primaries (AP0). */
+    ACES_AP0,
+
+    /** ACEScg working-space primaries (AP1). */
+    ACES_AP1,
+}
 
 @Serializable
 enum class TransferFunction { REC709, HLG, PQ, LINEAR }
+
+/** Linear working space used between the Input IDT and Output ODT. */
+@Serializable
+enum class WorkingColorSpace {
+    /** ACEScg (AP1) linear; the default for wide-gamut/HDR sources. */
+    ACESCG,
+
+    /** Linear sRGB; the explicit opt-out for SDR-only projects. */
+    LINEAR_SRGB,
+}
 
 @Serializable
 data class ColorSpaceSpec(
@@ -38,6 +57,7 @@ data class CompSettings(
     val fps: Double,
     val colorSpace: ColorSpaceSpec = ColorSpaceSpec(),
     val bitDepth: Int = 8,
+    val workingSpace: WorkingColorSpace = WorkingColorSpace.ACESCG,
 ) {
     init {
         require(width > 0 && height > 0) { "Composition dimensions must be positive" }

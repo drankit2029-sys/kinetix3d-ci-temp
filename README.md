@@ -75,5 +75,6 @@ were removed deliberately; re-add only when a feature requires them.
 Repository structure, Gradle setup and CI/CD pipeline are complete and verified on
 device (SM-M366B, Android 17). Phase 1 — OS API boundary (`PlatformApi` + seven
 managers), first-boot hardware profiler, immutable project model/WAL, math core and
-the Rust JNI chain — is complete. Phase 2 (OpenGL ES 3.2 render engine) is next —
-see the roadmap, §3.
+the Rust JNI chain — is complete. Phase 2 (OpenGL ES 3.2 render engine) is in
+progress: the pre-implementation audit is complete and the pure-Kotlin DAG/DoD
+planner is next — see the roadmap, §3.

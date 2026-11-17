@@ -67,6 +67,26 @@ class OperatorCatalogTest {
     }
 
     @Test
+    fun `coordinate remaps propagate a remapped RoI instead of a same-pixel neighbourhood`() {
+        listOf(
+            "kinetix.tiles",
+            "kinetix.corner-pin",
+            "kinetix.oscillate",
+            "kinetix.follow-path",
+        ).forEach { id ->
+            assertEquals(
+                TilingCapability.CoordinateRemap,
+                KinetixOperatorCatalog.requireById(id).tiling,
+                "$id must declare CoordinateRemap",
+            )
+        }
+        assertEquals(
+            TilingCapability.CoordinateRemap,
+            KinetixOperatorCatalog.warp.tilingFor("bezier_mesh"),
+        )
+    }
+
+    @Test
     fun `spatial parameters are normalized to composition height`() {
         val floats = KinetixOperatorCatalog.all.flatMap { it.params }.filterIsInstance<ParamSpec.FloatParam>()
         val spatial = floats.filter { it.unit == UnitType.COMP_HEIGHT_NORM }
@@ -322,6 +342,20 @@ class ProjectStateTest {
                 bitDepth = 12,
             )
         }
+    }
+
+    @Test
+    fun `composition defaults to ACEScg working space with a linear sRGB opt out`() {
+        val settings = CompSettings(width = 1920, height = 1080, fps = 60.0)
+        assertEquals(WorkingColorSpace.ACESCG, settings.workingSpace)
+        assertEquals(
+            WorkingColorSpace.LINEAR_SRGB,
+            settings.copy(workingSpace = WorkingColorSpace.LINEAR_SRGB).workingSpace,
+        )
+        assertEquals(
+            ColorPrimaries.ACES_AP1,
+            ColorSpaceSpec(primaries = ColorPrimaries.ACES_AP1).primaries,
+        )
     }
 
     @Test

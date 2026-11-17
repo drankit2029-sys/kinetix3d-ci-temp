@@ -61,6 +61,13 @@ sealed interface TilingCapability {
         }
     }
 
+    /**
+     * Output pixel `p` samples upstream at a remapped coordinate (tile wrap,
+     * homography, path transform). The tile composer must propagate the inverse
+     * mapped RoI upstream instead of assuming a same-position neighbourhood.
+     */
+    data object CoordinateRemap : TilingCapability
+
     /** Non-local by nature (sort, rays, global blur): hard Tile Barrier upstream. */
     data object GlobalSpatialBarrier : TilingCapability
 }
@@ -390,7 +397,7 @@ object KinetixOperatorCatalog {
                         unit = UnitType.DEGREES,
                     ),
                 ),
-            tiling = TilingCapability.PointExact,
+            tiling = TilingCapability.CoordinateRemap,
             searchSynonyms = listOf("mirror tiles", "kaleidoscope", "repeat", "grid", "offset tiles"),
         )
 
@@ -411,7 +418,7 @@ object KinetixOperatorCatalog {
                         "bezier_mesh",
                         "Bezier Mesh",
                         visibleParams = listOf("amplitude", "seed"),
-                        tilingOverride = TilingCapability.PointExact,
+                        tilingOverride = TilingCapability.CoordinateRemap,
                     ),
                     ModeSpec("liquify", "Liquify", visibleParams = listOf("amplitude", "frequency", "seed")),
                 ),
@@ -544,7 +551,7 @@ object KinetixOperatorCatalog {
                     ),
                     ParamSpec.IntParam("seed", "Seed", default = 0, max = 9999),
                 ),
-            tiling = TilingCapability.PointExact,
+            tiling = TilingCapability.CoordinateRemap,
             searchSynonyms = listOf("shake", "handheld", "jitter", "wobble", "oscillate"),
         )
 
@@ -643,7 +650,7 @@ object KinetixOperatorCatalog {
                     ParamSpec.Vec2Param("bottomLeft", "Bottom Left", unit = UnitType.COMP_HEIGHT_NORM),
                     ParamSpec.FloatParam("perspective", "Perspective", default = 0f, min = 0f, max = 1f),
                 ),
-            tiling = TilingCapability.PointExact,
+            tiling = TilingCapability.CoordinateRemap,
             searchSynonyms = listOf("corner pin", "card3d", "homography", "perspective", "page peel"),
         )
 
@@ -820,7 +827,7 @@ object KinetixOperatorCatalog {
                     ParamSpec.FloatParam("progress", "Progress", default = 0f),
                     ParamSpec.BoolParam("orientToPath", "Orient to Path", default = true),
                 ),
-            tiling = TilingCapability.PointExact,
+            tiling = TilingCapability.CoordinateRemap,
             searchSynonyms = listOf("follow path", "motion path", "orient", "spline"),
         )
 
