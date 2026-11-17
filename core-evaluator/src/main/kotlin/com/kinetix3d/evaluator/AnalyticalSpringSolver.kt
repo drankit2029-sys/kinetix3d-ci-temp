@@ -5,7 +5,9 @@
 
 package com.kinetix3d.evaluator
 
+import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.sqrt
 
 /** Spring parameters: `stiffness` is k (mass = 1), `damping` is c. */
@@ -56,6 +58,33 @@ object AnalyticalSpringSolver {
                 else -> critical(x0, velocity, target, omega, t)
             }
         return if (result.isFinite()) result else target
+    }
+
+    /**
+     * Seconds for the spring envelope to decay to 0.1% of the initial displacement.
+     * Keyframe easing uses this to fit a visible spring inside one segment while
+     * still landing on the target keyframe value.
+     */
+    fun settleSeconds(config: SpringConfig): Float {
+        val stiffness =
+            if (config.stiffness.isFinite()) {
+                config.stiffness.coerceAtLeast(
+                    MIN_STIFFNESS,
+                )
+            } else {
+                MIN_STIFFNESS
+            }
+        val damping = if (config.damping.isFinite()) config.damping else 26f
+        val omega = sqrt(stiffness)
+        val zeta = (damping / (2f * omega)).coerceAtLeast(MIN_DAMPING_RATIO)
+        val decay = zeta * omega
+        if (decay <= MIN_DAMPING_RATIO) return 1f
+        // Near-critical springs have a slowly decaying (1 + ωt) envelope; account for
+        // the coefficient amplification so 0.01% settle really means 0.01%.
+        val oscillation = omega * sqrt(abs(1f - zeta * zeta))
+        val amplification = 1f + decay / maxOf(oscillation, decay * 0.01f)
+        val seconds = (ln(10_000.0) + ln(amplification)) / decay
+        return seconds.toFloat().coerceIn(0.05f, 8f)
     }
 
     private fun underdamped(

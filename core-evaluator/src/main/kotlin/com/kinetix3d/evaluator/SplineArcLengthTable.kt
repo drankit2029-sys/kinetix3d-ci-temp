@@ -196,12 +196,26 @@ class SplineArcLengthTable(
         val derivative = cubicDerivative(segment, u)
         if (derivative.length() > MIN_LENGTH) return derivative.normalized()
 
+        // Degenerate control point: the first derivative vanishes. L'Hôpital says
+        // the tangent direction is the limit of B'(u)/|B'(u)|, so inspect the
+        // collapsed handle instead of snapping to the chord (which would twist the
+        // frame abruptly just after the endpoint).
+        if (u <= 0.5f) {
+            val collapseDirection = segment.c2 - segment.c1
+            if (collapseDirection.length() > MIN_LENGTH) return collapseDirection.normalized()
+            val leadingDirection = segment.c1 - segment.p0
+            if (leadingDirection.length() > MIN_LENGTH) return leadingDirection.normalized()
+        } else {
+            val collapseDirection = segment.p1 - segment.c2
+            if (collapseDirection.length() > MIN_LENGTH) return collapseDirection.normalized()
+            val innerDirection = segment.c2 - segment.c1
+            if (innerDirection.length() > MIN_LENGTH) return innerDirection.normalized()
+            val leadingDirection = segment.c1 - segment.p0
+            if (leadingDirection.length() > MIN_LENGTH) return leadingDirection.normalized()
+        }
+
         val chord = segment.p1 - segment.p0
         if (chord.length() > MIN_LENGTH) return chord.normalized()
-        val inner = segment.c2 - segment.c1
-        if (inner.length() > MIN_LENGTH) return inner.normalized()
-        val leading = segment.c1 - segment.p0
-        if (leading.length() > MIN_LENGTH) return leading.normalized()
         return Vec3.ZERO
     }
 

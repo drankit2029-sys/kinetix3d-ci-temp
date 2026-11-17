@@ -113,6 +113,41 @@ class SplineArcLengthTableTest {
         assertEquals(2.5f, vertex.featherRadius)
     }
 
+    @Test
+    fun `zero length leading handle uses the lhopital tangent instead of the chord`() {
+        val table =
+            SplineArcLengthTable(
+                listOf(
+                    BezierVertex(Vec3.ZERO),
+                    BezierVertex(Vec3(10f, 0f, 0f), inTangent = Vec3(0f, 10f, 0f)),
+                ),
+            )
+        val start = table.sampleAtNormalizedDistance(0f)
+        assertEquals(SQRT_HALF, start.tangent.x, 1e-3f)
+        assertEquals(SQRT_HALF, start.tangent.y, 1e-3f)
+
+        // No twist between u = 0 and u = 0.001: the limit direction holds.
+        val justInside = table.sampleAtNormalizedDistance(0.001f)
+        assertTrue(justInside.tangent.y > 0.5f, "tangent twisted to ${justInside.tangent}")
+    }
+
+    @Test
+    fun `zero length trailing handle uses the lhopital tangent instead of the chord`() {
+        val table =
+            SplineArcLengthTable(
+                listOf(
+                    BezierVertex(Vec3.ZERO, outTangent = Vec3(0f, 10f, 0f)),
+                    BezierVertex(Vec3(10f, 0f, 0f)),
+                ),
+            )
+        val end = table.sampleAtNormalizedDistance(1f)
+        assertEquals(SQRT_HALF, end.tangent.x, 1e-3f)
+        assertEquals(-SQRT_HALF, end.tangent.y, 1e-3f)
+
+        val justBefore = table.sampleAtNormalizedDistance(0.999f)
+        assertTrue(justBefore.tangent.y < -0.5f, "tangent twisted to ${justBefore.tangent}")
+    }
+
     private fun straightLine(): SplineArcLengthTable =
         SplineArcLengthTable(
             listOf(
@@ -140,5 +175,9 @@ class SplineArcLengthTableTest {
         assertEquals(expected.x, actual.x, tolerance)
         assertEquals(expected.y, actual.y, tolerance)
         assertEquals(expected.z, actual.z, tolerance)
+    }
+
+    private companion object {
+        const val SQRT_HALF = 0.70710678f
     }
 }
