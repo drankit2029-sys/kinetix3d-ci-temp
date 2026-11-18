@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Phase 3 persistence: `.kproj` snapshots + WAL replay.
-- Phone-verify trim → force-stop → restore.
+- Hardware export: DAG → MediaCodec input surface → MediaMuxer → MediaStore.
+- Phone-verify the exported MP4 and the publish path.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -21,13 +21,15 @@ Updated: 2026-11-19
 - `.kproj` container (`K3DP` magic + version + CRC32 + protobuf `ProjectState`) with JVM tests.
 - `ProjectStore`: atomic snapshot writes, WAL append on trim, replay + checkpoint on startup; JVM tests.
 - Phone-verified persistence: trimmed "Winter Olympics" to 00:06.500, force-stopped, restarted → "project: restored demo" and 00:06.500 survived.
+- `HardwareExportSession`: synchronous frame-accurate decode → DAG → encoder input surface → MediaMuxer; `EglCore.setPresentationTime`; export planner at full comp resolution.
+- Export UI: 3s 1080p H.264 button, progress bar, atomic MediaStore publish, cache cleanup.
+- Phone-verified export: 180 frames, 1920x1080, 3.000s, avc1, 6.0MB, published to `content://media/external_primary/video/media/212868`.
 
 ## In progress
-- Commit/push/CI for the persistence slice.
+- Commit/push/CI for the export slice.
 - Measure sustained 30/60fps playback and decoder-pool stats on the phone.
 
 ## Next
-- Hardware export session (uses the reserved decoder slot).
 - Multi-clip decoder scheduling (interval index + pre-seek 1.5s ahead).
 - More operator kernels (Warp, Glitch, Vectorify, Keyer, …).
 - Phone-first interaction audit for every new control.

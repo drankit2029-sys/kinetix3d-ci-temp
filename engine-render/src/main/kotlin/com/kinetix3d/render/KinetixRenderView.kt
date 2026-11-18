@@ -38,7 +38,7 @@ class KinetixRenderView
         private var isPlaying = false
 
         init {
-            renderThread.setSourcePath(findTestMedia())
+            renderThread.setSourcePath(findTestMedia(context))
             holder.addCallback(this)
             holder.setFormat(PixelFormat.RGBA_8888)
         }
@@ -126,21 +126,22 @@ class KinetixRenderView
             )
         }
 
-        private fun findTestMedia(): String? {
-            val directory = context.getExternalFilesDir(null) ?: return null
-            return listOf(
-                "kinetix-test.png",
-                "kinetix-test.jpg",
-                "kinetix-test.jpeg",
-                "kinetix-test.mp4",
-                "kinetix-test.mov",
-            ).map { File(directory, it) }
-                .firstOrNull { it.isFile }
-                ?.absolutePath
-        }
-
-        private companion object {
+        companion object {
             private const val PLAYHEAD_THROTTLE_US = 33_000L
             private const val PLAYING_THROTTLE_US = 16_000L
+
+            /** Demo media lookup shared by the preview and the export session. */
+            fun findTestMedia(context: Context): String? {
+                val directory = context.getExternalFilesDir(null) ?: return null
+                return listOf(
+                    "kinetix-test.png",
+                    "kinetix-test.jpg",
+                    "kinetix-test.jpeg",
+                    "kinetix-test.mp4",
+                    "kinetix-test.mov",
+                ).map { File(directory, it) }
+                    .firstOrNull { it.isFile }
+                    ?.absolutePath
+            }
         }
     }

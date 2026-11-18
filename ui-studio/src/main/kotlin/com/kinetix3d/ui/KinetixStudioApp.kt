@@ -9,6 +9,7 @@
 
 package com.kinetix3d.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,12 +25,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -49,11 +54,17 @@ import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
+import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.render.demoEffectsGraph
+import com.kinetix3d.render.export.HardwareExportSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -66,6 +77,11 @@ private val StudioAccent = Color(0xFF38E1C6)
 private val StudioMuted = Color(0xFF8A94A3)
 private val StudioText = Color(0xFFE7ECF3)
 private val StudioWarning = Color(0xFFFFB454)
+
+private const val EXPORT_DEMO_US = 3_000_000L
+
+/** Demo media lookup exposed to :app without leaking the engine-render dependency. */
+fun demoMediaPath(context: Context): String? = KinetixRenderView.findTestMedia(context)
 
 private fun probeRustAbi(): String =
     try {
@@ -95,6 +111,8 @@ fun KinetixStudioApp(
     deviceProfile: DeviceCapabilityProfile? = null,
     renderGuard: DirtyRenderLock.Inspection? = null,
     projectStore: ProjectStore? = null,
+    platformApi: PlatformApi? = null,
+    mediaPath: String? = null,
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
@@ -102,6 +120,10 @@ fun KinetixStudioApp(
     var effectsEnabled by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
+    var exportStatus by remember { mutableStateOf<String?>(null) }
+    val exportProgress = remember { MutableStateFlow(0f) }
+    val progress by exportProgress.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val demoGraph = remember(effectsEnabled) { if (effectsEnabled) demoEffectsGraph() else demoClipGraph() }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
@@ -181,6 +203,85 @@ fun KinetixStudioApp(
                             fontSize = 12.sp,
                         )
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            val api = platformApi
+                            val path = mediaPath
+                            if (api == null || path == null) {
+                                exportStatus = "export unavailable (no media)"
+                                return@Button
+                            }
+                            scope.launch {
+                                exportStatus = "exporting…"
+                                exportProgress.value = 0f
+                                val result =
+                                    runCatching {
+                                        withContext(Dispatchers.Default) {
+                                            val output =
+                                                File(
+                                                    context.cacheDir,
+                                                    "kinetix-export-${System.currentTimeMillis()}.mp4",
+                                                )
+                                            val duration =
+                                                minOf(
+                                                    demoState.activeComposition().durationUs(),
+                                                    EXPORT_DEMO_US,
+                                                )
+                                            HardwareExportSession(
+                                                sourcePath = path,
+                                                graph = demoGraph,
+                                                comp = demoState.settings.copy(width = 1920, height = 1080),
+                                                profile = deviceProfile ?: DeviceCapabilityProfile.tier2Default(),
+                                                outputFile = output,
+                                                durationUs = duration,
+                                            ).export { value -> exportProgress.value = value }
+                                        }
+                                    }
+                                result
+                                    .onSuccess { export ->
+                                        val published =
+                                            runCatching {
+                                                api.storageAndExport.publishExportAtomically(
+                                                    export.file,
+                                                    export.file.name,
+                                                    export.mimeType,
+                                                )
+                                            }
+                                        exportStatus =
+                                            published.fold(
+                                                onSuccess = {
+                                                    export.file.delete()
+                                                    "exported ${export.frames} frames → $it"
+                                                },
+                                                onFailure = { "export saved, publish failed: ${it.message}" },
+                                            )
+                                    }.onFailure { error ->
+                                        exportStatus = "export failed: ${error.message}"
+                                    }
+                            }
+                        },
+                        modifier = Modifier.height(40.dp),
+                    ) {
+                        Text(if (exportStatus == "exporting…") "Exporting…" else "Export 3s")
+                    }
+                    Text(
+                        text = exportStatus ?: "hardware H.264 · 1080p",
+                        color = StudioMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (exportStatus == "exporting…") {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 TimelinePanel(
                     project = timelineProject,

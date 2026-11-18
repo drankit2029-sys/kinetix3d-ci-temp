@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.ui.KinetixStudioApp
+import com.kinetix3d.ui.demoMediaPath
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +38,8 @@ class MainActivity : ComponentActivity() {
                 deviceProfile = deviceProfile,
                 renderGuard = renderGuard,
                 projectStore = projectStore,
+                platformApi = kinetix.platformApi,
+                mediaPath = demoMediaPath(context),
             )
         }
     }

@@ -10,6 +10,7 @@ import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.EGLContext
 import android.opengl.EGLDisplay
+import android.opengl.EGLExt
 import android.opengl.EGLSurface
 import android.util.Log
 import android.view.Surface
@@ -63,6 +64,12 @@ class EglCore {
     fun swapBuffers(): Boolean {
         if (surface == EGL14.EGL_NO_SURFACE) return false
         return EGL14.eglSwapBuffers(display, surface)
+    }
+
+    /** Stamps the next swap with the encoder presentation timestamp (nanoseconds). */
+    fun setPresentationTime(nanos: Long) {
+        if (display == EGL14.EGL_NO_DISPLAY || surface == EGL14.EGL_NO_SURFACE) return
+        EGLExt.eglPresentationTimeANDROID(display, surface, nanos)
     }
 
     fun releaseSurface() {
