@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +90,8 @@ fun KinetixStudioApp(
     renderGuard: DirtyRenderLock.Inspection? = null,
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
-    val demoState = remember { demoProjectState() }
+    var demoState by remember { mutableStateOf(demoProjectState()) }
+    var selectedClipId by remember { mutableStateOf<String?>(null) }
     val demoGraph = remember { demoClipGraph() }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
     MaterialTheme {
@@ -143,10 +145,13 @@ fun KinetixStudioApp(
                     project = timelineProject,
                     playheadUs = playheadUs,
                     onPlayheadChange = { playheadUs = it },
+                    selectedClipId = selectedClipId,
+                    onSelectClip = { selectedClipId = it },
+                    onTrimClip = { id, start, end -> demoState = demoState.trimClip(id, start, end) },
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
+                            .height(260.dp)
                             .clip(RoundedCornerShape(12.dp)),
                 )
                 SectionLabel(

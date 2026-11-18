@@ -96,3 +96,29 @@ fun demoProjectState(): ProjectState {
         activeCompId = "main",
     )
 }
+
+fun ProjectState.trimClip(
+    clipId: String,
+    newInUs: Long,
+    newOutUs: Long,
+): ProjectState {
+    val composition = activeComposition()
+    val clip = composition.clips[clipId] ?: return this
+    val newIn = newInUs.coerceAtLeast(0L)
+    val newOut = newOutUs.coerceAtLeast(newIn + 1L)
+    val deltaIn = newIn - clip.timelineInUs
+    val deltaOut = newOut - clip.timelineOutUs
+    val newSourceIn = (clip.sourceInUs + deltaIn).coerceAtLeast(0L)
+    val newSourceOut = (clip.sourceOutUs + deltaOut).coerceAtLeast(newSourceIn)
+    val updated =
+        clip.copy(
+            timelineInUs = newIn,
+            timelineOutUs = newOut,
+            sourceInUs = newSourceIn,
+            sourceOutUs = newSourceOut,
+        )
+    val updatedComposition = composition.copy(clips = composition.clips.putting(clipId, updated))
+    return copy(
+        compositions = compositions.putting(composition.compositionId, updatedComposition),
+    )
+}

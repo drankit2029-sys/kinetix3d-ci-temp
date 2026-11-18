@@ -39,6 +39,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -167,6 +168,9 @@ fun TimelinePanel(
     project: TimelineProjectUi,
     playheadUs: Long,
     onPlayheadChange: (Long) -> Unit,
+    selectedClipId: String? = null,
+    onSelectClip: (String?) -> Unit = {},
+    onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     var isPlaying by remember { mutableStateOf(false) }
@@ -178,6 +182,11 @@ fun TimelinePanel(
     val trackHeight = 44.dp
     val rulerHeight = 28.dp
     val headerWidth = 76.dp
+    val selectedClip =
+        project.tracks
+            .asSequence()
+            .flatMap { it.clips.asSequence() }
+            .firstOrNull { it.id == selectedClipId }
 
     LaunchedEffect(isPlaying) {
         if (!isPlaying) return@LaunchedEffect
@@ -223,6 +232,44 @@ fun TimelinePanel(
             }
             TextButton(onClick = { pxPerSecond = (pxPerSecond + 16f).coerceAtMost(160f) }) {
                 Text("+", color = TimelineText)
+            }
+        }
+        if (selectedClip != null) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = selectedClip.label,
+                    color = TimelineAccent,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = {
+                        onTrimClip(
+                            selectedClip.id,
+                            selectedClip.startUs + TRIM_STEP_US,
+                            selectedClip.startUs + selectedClip.durationUs,
+                        )
+                    },
+                ) {
+                    Text("Trim In +0.5s", fontSize = 10.sp)
+                }
+                TextButton(
+                    onClick = {
+                        onTrimClip(
+                            selectedClip.id,
+                            selectedClip.startUs,
+                            selectedClip.startUs + selectedClip.durationUs - TRIM_STEP_US,
+                        )
+                    },
+                ) {
+                    Text("Trim Out −0.5s", fontSize = 10.sp)
+                }
             }
         }
         Row(
@@ -286,6 +333,8 @@ fun TimelinePanel(
                     project = project,
                     playheadUs = playheadUs,
                     onPlayheadChange = onPlayheadChange,
+                    selectedClipId = selectedClipId,
+                    onSelectClip = onSelectClip,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
                     rulerHeight = rulerHeight,
@@ -301,6 +350,8 @@ private fun TimelineCanvas(
     project: TimelineProjectUi,
     playheadUs: Long,
     onPlayheadChange: (Long) -> Unit,
+    selectedClipId: String?,
+    onSelectClip: (String?) -> Unit,
     pxPerSecond: Float,
     width: Dp,
     rulerHeight: Dp,
@@ -318,9 +369,15 @@ private fun TimelineCanvas(
             Modifier
                 .width(width)
                 .height(with(density) { totalHeight.toDp() })
-                .pointerInput(durationUs, widthPx) {
+                .pointerInput(durationUs, widthPx, project) {
                     detectTapGestures { offset ->
-                        onPlayheadChange(xToUs(offset.x, widthPx, durationUs))
+                        val hit = hitTestClip(offset, project, widthPx, rulerPx, trackPx, durationUs)
+                        if (hit != null) {
+                            onSelectClip(hit.id)
+                        } else {
+                            onSelectClip(null)
+                            onPlayheadChange(xToUs(offset.x, widthPx, durationUs))
+                        }
                     }
                 }.pointerInput(durationUs, widthPx) {
                     detectDragGestures { change, _ ->
@@ -361,6 +418,15 @@ private fun TimelineCanvas(
                     size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
                     cornerRadius = CornerRadius(6f, 6f),
                 )
+                if (clip.id == selectedClipId) {
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(left + 1f, rectTop),
+                        size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
+                        cornerRadius = CornerRadius(6f, 6f),
+                        style = Stroke(width = 2f),
+                    )
+                }
                 val layout =
                     textMeasurer.measure(
                         text = clip.label,
@@ -384,6 +450,26 @@ private fun xToUs(
     val fraction = (x.coerceIn(0f, widthPx) / widthPx)
     return (fraction * durationUs).toLong().coerceIn(0L, durationUs)
 }
+
+private fun hitTestClip(
+    offset: Offset,
+    project: TimelineProjectUi,
+    widthPx: Float,
+    rulerPx: Float,
+    trackPx: Float,
+    durationUs: Long,
+): TimelineClipUi? {
+    if (offset.y < rulerPx || widthPx <= 0f) return null
+    val trackIndex = ((offset.y - rulerPx) / trackPx).toInt()
+    val track = project.tracks.getOrNull(trackIndex) ?: return null
+    return track.clips.firstOrNull { clip ->
+        val left = (clip.startUs.toFloat() / durationUs.toFloat()) * widthPx
+        val right = ((clip.startUs + clip.durationUs).toFloat() / durationUs.toFloat()) * widthPx
+        offset.x in left..right
+    }
+}
+
+private const val TRIM_STEP_US = 500_000L
 
 private fun formatTime(us: Long): String {
     val totalMs = (us / 1_000L).coerceAtLeast(0L)
