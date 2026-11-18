@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -48,6 +49,7 @@ import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.demoClipGraph
+import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -92,7 +94,8 @@ fun KinetixStudioApp(
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
-    val demoGraph = remember { demoClipGraph() }
+    var effectsEnabled by remember { mutableStateOf(false) }
+    val demoGraph = remember(effectsEnabled) { if (effectsEnabled) demoEffectsGraph() else demoClipGraph() }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
     MaterialTheme {
         Scaffold(
@@ -136,11 +139,26 @@ fun KinetixStudioApp(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                Text(
-                    text = "4K SOURCE — 960p PREVIEW · ColorSuite → Blur → Glow",
-                    color = StudioMuted,
-                    fontSize = 12.sp,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text =
+                            "4K SOURCE — 960p PREVIEW · " +
+                                if (effectsEnabled) "ColorSuite → Blur → Glow" else "Clean",
+                        color = StudioMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { effectsEnabled = !effectsEnabled }) {
+                        Text(
+                            text = if (effectsEnabled) "FX On" else "FX Off",
+                            color = StudioAccent,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
                 TimelinePanel(
                     project = timelineProject,
                     playheadUs = playheadUs,

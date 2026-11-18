@@ -12,7 +12,9 @@ import com.kinetix3d.model.NodeSchemaIds
 import com.kinetix3d.model.ParamChannel
 import kotlinx.collections.immutable.persistentMapOf
 
-fun demoClipGraph(): NodeGraph {
+fun demoClipGraph(): NodeGraph = NodeGraph.passthrough()
+
+fun demoEffectsGraph(): NodeGraph {
     val base = NodeGraph.passthrough()
     val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
     val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
