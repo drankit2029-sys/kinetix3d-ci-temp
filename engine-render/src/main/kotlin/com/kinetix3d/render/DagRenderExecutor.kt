@@ -19,6 +19,7 @@ class DagRenderExecutor(
     private val source: SourceTexture = ProceduralSource(),
 ) : AutoCloseable {
     private val passThrough = PassThroughKernel()
+    private val externalPassThrough = ExternalPassThroughKernel()
     private val colorSuite = ColorSuiteKernel()
     private val blur = BlurKernel()
     private val tiles = TilesKernel()
@@ -27,6 +28,7 @@ class DagRenderExecutor(
     fun initialize(): Boolean =
         source.initialize() &&
             passThrough.initialize() &&
+            externalPassThrough.initialize() &&
             colorSuite.initialize() &&
             blur.initialize() &&
             tiles.initialize() &&
@@ -37,7 +39,9 @@ class DagRenderExecutor(
         graph: NodeGraph,
         windowWidth: Int,
         windowHeight: Int,
+        ptsUs: Long,
     ): Boolean {
+        source.update(ptsUs)
         val viewportWidth =
             plan.tiles
                 .maxOf { it.output.right }
@@ -70,16 +74,29 @@ class DagRenderExecutor(
                 when (pass.schemaId) {
                     NodeSchemaIds.GROUP_INPUT -> {
                         val out = pool.acquire(roiWidth, roiHeight) ?: return false
-                        passThrough.render(
-                            inputTexture = source.textureId,
-                            outputFramebuffer = out.framebufferId,
-                            width = roiWidth,
-                            height = roiHeight,
-                            tileOffsetX = offsetX,
-                            tileOffsetY = offsetY,
-                            tileScaleX = scaleX,
-                            tileScaleY = scaleY,
-                        )
+                        if (source.isExternal) {
+                            externalPassThrough.render(
+                                inputTexture = source.textureId,
+                                outputFramebuffer = out.framebufferId,
+                                width = roiWidth,
+                                height = roiHeight,
+                                tileOffsetX = offsetX,
+                                tileOffsetY = offsetY,
+                                tileScaleX = scaleX,
+                                tileScaleY = scaleY,
+                            )
+                        } else {
+                            passThrough.render(
+                                inputTexture = source.textureId,
+                                outputFramebuffer = out.framebufferId,
+                                width = roiWidth,
+                                height = roiHeight,
+                                tileOffsetX = offsetX,
+                                tileOffsetY = offsetY,
+                                tileScaleX = scaleX,
+                                tileScaleY = scaleY,
+                            )
+                        }
                         currentHandle?.let { pool.release(it) }
                         currentHandle = out
                         currentFramebuffer = out.framebufferId
@@ -256,6 +273,7 @@ class DagRenderExecutor(
 
     override fun close() {
         passThrough.release()
+        externalPassThrough.release()
         colorSuite.release()
         blur.release()
         tiles.release()

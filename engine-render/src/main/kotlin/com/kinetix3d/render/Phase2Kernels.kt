@@ -5,6 +5,7 @@
 
 package com.kinetix3d.render
 
+import android.opengl.GLES11Ext
 import android.opengl.GLES20
 
 class PassThroughKernel {
@@ -45,6 +46,52 @@ class PassThroughKernel {
             precision mediump float;
             varying vec2 vUv;
             uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vUv);
+            }
+        """
+    }
+}
+
+class ExternalPassThroughKernel {
+    private val quad = FullscreenQuad()
+    private var textureLocation = -1
+
+    fun initialize(): Boolean {
+        if (!quad.create(FRAGMENT_SHADER)) return false
+        textureLocation = GLES20.glGetUniformLocation(quad.programId, "uTexture")
+        return textureLocation >= 0
+    }
+
+    fun render(
+        inputTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        tileOffsetX: Float,
+        tileOffsetY: Float,
+        tileScaleX: Float,
+        tileScaleY: Float,
+    ) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, inputTexture)
+        quad.use(tileOffsetX, tileOffsetY, tileScaleX, tileScaleY)
+        GLES20.glUniform1i(textureLocation, 0)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
+    }
+
+    fun release() = quad.release()
+
+    companion object {
+        private const val FRAGMENT_SHADER = """
+            #extension GL_OES_EGL_image_external : require
+            precision mediump float;
+            varying vec2 vUv;
+            uniform samplerExternalOES uTexture;
             void main() {
                 gl_FragColor = texture2D(uTexture, vUv);
             }

@@ -118,9 +118,15 @@ class RenderThread(
         hasRenderedTicket = false
         Log.d(TAG, "EGL ready es3=${core.isEs3}")
         if (core.isEs3) {
-            val source = sourcePath?.let { MediaSource(it) } ?: ProceduralSource()
+            val path = sourcePath
+            val source =
+                when {
+                    path == null -> ProceduralSource()
+                    path.endsWith(".mp4", true) || path.endsWith(".mov", true) -> MediaCodecSource(path)
+                    else -> MediaSource(path)
+                }
             val dag = DagRenderExecutor(fboPool, source)
-            if (dag.initialize()) {
+            if (runCatching { dag.initialize() }.getOrDefault(false)) {
                 executor = dag
             } else {
                 Log.e(TAG, "DAG executor initialization failed; using test pattern")
@@ -155,7 +161,7 @@ class RenderThread(
                     "plan tiles=${plan.tiles.size} format=${plan.format} " +
                         "reduced=${plan.reducedResolution} budget=${plan.budgetBytes}",
                 )
-                val rendered = executor?.render(plan, ticket.graph, width, height) ?: false
+                val rendered = executor?.render(plan, ticket.graph, width, height, ticket.ptsUs) ?: false
                 Log.d(TAG, "executor rendered=$rendered")
                 if (rendered && core.swapBuffers()) {
                     hasRenderedTicket = true
