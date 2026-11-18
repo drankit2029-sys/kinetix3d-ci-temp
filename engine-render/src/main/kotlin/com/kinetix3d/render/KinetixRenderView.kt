@@ -97,7 +97,7 @@ class KinetixRenderView
                     state = state,
                     overrides = TransientOverrideMap.EMPTY,
                     ptsUs = playheadUs,
-                    previewScale = 1.0f,
+                    previewScale = 0.25f,
                     generation = 1L,
                     graph = projectGraph ?: demoClipGraph(),
                 ),
@@ -131,6 +131,6 @@ class KinetixRenderView
         }
 
         private companion object {
-            private const val PLAYHEAD_THROTTLE_US = 250_000L
+            private const val PLAYHEAD_THROTTLE_US = 33_000L
         }
     }

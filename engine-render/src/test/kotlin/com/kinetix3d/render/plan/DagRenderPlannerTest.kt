@@ -7,6 +7,8 @@ import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.model.NodeGraph
 import com.kinetix3d.model.NodeInput
 import com.kinetix3d.model.NodeSchemaIds
+import com.kinetix3d.model.ParamChannel
+import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentMapOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,6 +39,7 @@ class DagRenderPlannerTest {
     private fun graphWith(
         schemaId: String,
         nodeId: String = "fx",
+        params: PersistentMap<String, ParamChannel> = persistentMapOf(),
     ): NodeGraph {
         val base = NodeGraph.passthrough()
         val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
@@ -46,6 +49,7 @@ class DagRenderPlannerTest {
                 nodeId = nodeId,
                 schemaId = schemaId,
                 inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
+                params = params,
             )
         return base.copy(
             nodes =
@@ -98,7 +102,14 @@ class DagRenderPlannerTest {
 
     @Test
     fun `4K tier3 blur falls back to reduced resolution`() {
-        val plan = planner.plan(graphWith("kinetix.blur"), comp4k, previewScale = 1f, profile = tier3, export = true)
+        val plan =
+            planner.plan(
+                graphWith("kinetix.blur", params = persistentMapOf("radius" to ParamChannel.constant(0.5f))),
+                comp4k,
+                previewScale = 1f,
+                profile = tier3,
+                export = true,
+            )
         assertTrue(plan.reducedResolution)
         assertEquals(1, plan.tiles.size)
     }

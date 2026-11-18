@@ -156,13 +156,7 @@ class RenderThread(
                     )
                 }.getOrNull()
             if (plan != null) {
-                Log.d(
-                    TAG,
-                    "plan tiles=${plan.tiles.size} format=${plan.format} " +
-                        "reduced=${plan.reducedResolution} budget=${plan.budgetBytes}",
-                )
                 val rendered = executor?.render(plan, ticket.graph, width, height, ticket.ptsUs) ?: false
-                Log.d(TAG, "executor rendered=$rendered")
                 if (rendered && core.swapBuffers()) {
                     hasRenderedTicket = true
                     runCatching { renderLock.clearAfterSwap() }

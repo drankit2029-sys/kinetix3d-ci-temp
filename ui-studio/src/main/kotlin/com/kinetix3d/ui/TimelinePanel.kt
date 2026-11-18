@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -226,8 +227,11 @@ fun TimelinePanel(
                 fontSize = 12.sp,
             )
             Spacer(Modifier.width(8.dp))
-            TextButton(onClick = { isPlaying = !isPlaying }) {
-                Text(if (isPlaying) "Pause" else "Play", color = TimelineText)
+            Button(
+                onClick = { isPlaying = !isPlaying },
+                modifier = Modifier.height(40.dp),
+            ) {
+                Text(if (isPlaying) "Pause" else "Play")
             }
             TextButton(onClick = { pxPerSecond = (pxPerSecond - 16f).coerceAtLeast(32f) }) {
                 Text("−", color = TimelineText)

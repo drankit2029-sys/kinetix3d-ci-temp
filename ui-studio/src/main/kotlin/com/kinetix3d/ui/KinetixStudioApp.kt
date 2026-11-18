@@ -137,7 +137,7 @@ fun KinetixStudioApp(
                     )
                 }
                 Text(
-                    text = "4K MULTI-TILE — ColorSuite → Blur → Glow",
+                    text = "4K SOURCE — 960p PREVIEW · ColorSuite → Blur → Glow",
                     color = StudioMuted,
                     fontSize = 12.sp,
                 )
