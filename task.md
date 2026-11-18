@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Hardware export: DAG → MediaCodec input surface → MediaMuxer → MediaStore.
-- Phone-verify the exported MP4 and the publish path.
+- Operator kernels: Warp, Glitch, Vectorify, Keyer + FX chip rack.
+- Phone-verify each kernel and the clean reset.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -24,9 +24,11 @@ Updated: 2026-11-19
 - `HardwareExportSession`: synchronous frame-accurate decode → DAG → encoder input surface → MediaMuxer; `EglCore.setPresentationTime`; export planner at full comp resolution.
 - Export UI: 3s 1080p H.264 button, progress bar, atomic MediaStore publish, cache cleanup.
 - Phone-verified export: 180 frames, 1920x1080, 3.000s, avc1, 6.0MB, published to `content://media/external_primary/video/media/212868`.
+- Kernels: Warp (7 modes), Glitch (RGB split/block/scanline/VHS/tear), Vectorify (Oklab posterize), Keyer (chroma/luma + despill + checkerboard preview).
+- FX chip rack: Clean / Color / Warp / Glitch / Vectorify / Keyer, chain order preserved; phone-verified each kernel and the clean reset.
 
 ## In progress
-- Commit/push/CI for the export slice.
+- Commit/push/CI for the kernel slice.
 - Measure sustained 30/60fps playback and decoder-pool stats on the phone.
 
 ## Next

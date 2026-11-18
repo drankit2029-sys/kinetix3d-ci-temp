@@ -11,6 +11,7 @@ package com.kinetix3d.ui
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,11 +27,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,6 +60,7 @@ import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.render.demoEffectsGraph
+import com.kinetix3d.render.demoKernelGraph
 import com.kinetix3d.render.export.HardwareExportSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -117,7 +119,7 @@ fun KinetixStudioApp(
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
-    var effectsEnabled by remember { mutableStateOf(false) }
+    var selectedEffects by remember { mutableStateOf<List<String>>(emptyList()) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var exportStatus by remember { mutableStateOf<String?>(null) }
@@ -125,7 +127,20 @@ fun KinetixStudioApp(
     val progress by exportProgress.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val demoGraph = remember(effectsEnabled) { if (effectsEnabled) demoEffectsGraph() else demoClipGraph() }
+    val demoGraph =
+        remember(selectedEffects) {
+            when {
+                selectedEffects.isEmpty() -> demoClipGraph()
+                selectedEffects == listOf("color") -> demoEffectsGraph()
+                else -> demoKernelGraph(selectedEffects)
+            }
+        }
+    val effectLabel =
+        when {
+            selectedEffects.isEmpty() -> "Clean"
+            selectedEffects == listOf("color") -> "ColorSuite → Blur → Glow"
+            else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
+        }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
 
     LaunchedEffect(projectStore) {
@@ -184,23 +199,36 @@ fun KinetixStudioApp(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                Text(
+                    text = "4K SOURCE — 960p PREVIEW · $effectLabel",
+                    color = StudioMuted,
+                    fontSize = 12.sp,
+                )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        text =
-                            "4K SOURCE — 960p PREVIEW · " +
-                                if (effectsEnabled) "ColorSuite → Blur → Glow" else "Clean",
-                        color = StudioMuted,
-                        fontSize = 12.sp,
-                        modifier = Modifier.weight(1f),
+                    FilterChip(
+                        selected = selectedEffects.isEmpty(),
+                        onClick = { selectedEffects = emptyList() },
+                        label = { Text("Clean") },
                     )
-                    TextButton(onClick = { effectsEnabled = !effectsEnabled }) {
-                        Text(
-                            text = if (effectsEnabled) "FX On" else "FX Off",
-                            color = StudioAccent,
-                            fontSize = 12.sp,
+                    FilterChip(
+                        selected = selectedEffects == listOf("color"),
+                        onClick = { selectedEffects = listOf("color") },
+                        label = { Text("Color") },
+                    )
+                    listOf("warp", "glitch", "vectorify", "keyer").forEach { effect ->
+                        FilterChip(
+                            selected = effect in selectedEffects,
+                            onClick = {
+                                val base = selectedEffects.filter { it != "color" }
+                                selectedEffects = if (effect in base) base - effect else base + effect
+                            },
+                            label = { Text(effect.replaceFirstChar { it.uppercase() }) },
                         )
                     }
                 }

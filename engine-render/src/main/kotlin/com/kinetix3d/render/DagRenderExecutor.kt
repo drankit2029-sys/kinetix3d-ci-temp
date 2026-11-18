@@ -24,6 +24,10 @@ class DagRenderExecutor(
     private val blur = BlurKernel()
     private val tiles = TilesKernel()
     private val glow = GlowKernel()
+    private val warp = WarpKernel()
+    private val glitch = GlitchKernel()
+    private val vectorify = VectorifyKernel()
+    private val keyer = KeyerKernel()
 
     fun initialize(): Boolean =
         source.initialize() &&
@@ -32,7 +36,11 @@ class DagRenderExecutor(
             colorSuite.initialize() &&
             blur.initialize() &&
             tiles.initialize() &&
-            glow.initialize()
+            glow.initialize() &&
+            warp.initialize() &&
+            glitch.initialize() &&
+            vectorify.initialize() &&
+            keyer.initialize()
 
     fun render(
         plan: RenderPlan,
@@ -209,6 +217,102 @@ class DagRenderExecutor(
                         checkGl("glow")
                     }
 
+                    "kinetix.warp" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        warp.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            amplitude = param(graph, pass.nodeId, "amplitude", 0.02f),
+                            frequency = param(graph, pass.nodeId, "frequency", 4f),
+                            seed = param(graph, pass.nodeId, "seed", 0f),
+                            timeSeconds = ptsUs / 1_000_000f,
+                            mode =
+                                modeIndex(
+                                    pass.modeId,
+                                    "turbulent",
+                                    "displace_map",
+                                    "wave",
+                                    "swirl",
+                                    "bulge",
+                                    "bezier_mesh",
+                                    "liquify",
+                                ),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("warp")
+                    }
+
+                    "kinetix.glitch" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        glitch.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            intensity = param(graph, pass.nodeId, "intensity", 0.5f),
+                            seed = param(graph, pass.nodeId, "seed", 0f),
+                            blockSize = param(graph, pass.nodeId, "blockSize", 0.015f),
+                            timeSeconds = ptsUs / 1_000_000f,
+                            mode =
+                                modeIndex(
+                                    pass.modeId,
+                                    "rgb_split",
+                                    "block",
+                                    "scanline",
+                                    "datamosh",
+                                    "pixel_sort",
+                                    "vhs_crt",
+                                    "wave_slice_tear",
+                                ),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("glitch")
+                    }
+
+                    "kinetix.vectorify" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        vectorify.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            levels = param(graph, pass.nodeId, "levels", 6f).toInt().coerceIn(2, 32),
+                            mode = modeIndex(pass.modeId, "stylize", "posterize"),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("vectorify")
+                    }
+
+                    "kinetix.keyer" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        keyer.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            tolerance = param(graph, pass.nodeId, "tolerance", 0.1f),
+                            softness = param(graph, pass.nodeId, "softness", 0.05f),
+                            despill = param(graph, pass.nodeId, "despill", 0.5f),
+                            mode = modeIndex(pass.modeId, "chroma", "polyhedral", "luma"),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("keyer")
+                    }
+
                     else -> {
                         Unit
                     }
@@ -218,6 +322,11 @@ class DagRenderExecutor(
         }
         return true
     }
+
+    private fun modeIndex(
+        modeId: String?,
+        vararg modes: String,
+    ): Int = modes.indexOf(modeId).coerceAtLeast(0)
 
     private fun param(
         graph: NodeGraph,
@@ -281,6 +390,10 @@ class DagRenderExecutor(
         blur.release()
         tiles.release()
         glow.release()
+        warp.release()
+        glitch.release()
+        vectorify.release()
+        keyer.release()
         source.release()
     }
 

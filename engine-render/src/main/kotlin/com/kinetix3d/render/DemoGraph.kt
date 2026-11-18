@@ -14,6 +14,69 @@ import kotlinx.collections.immutable.persistentMapOf
 
 fun demoClipGraph(): NodeGraph = NodeGraph.passthrough()
 
+/** Builds a linear chain of the selected demo kernels in list order. */
+fun demoKernelGraph(effects: List<String>): NodeGraph {
+    if (effects.isEmpty()) return NodeGraph.passthrough()
+    val base = NodeGraph.passthrough()
+    val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
+    val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
+    var previous = input.nodeId
+    var nodes = base.nodes
+    effects.forEach { effect ->
+        val schemaId =
+            when (effect) {
+                "warp" -> "kinetix.warp"
+                "glitch" -> "kinetix.glitch"
+                "vectorify" -> "kinetix.vectorify"
+                "keyer" -> "kinetix.keyer"
+                else -> return@forEach
+            }
+        val params =
+            when (effect) {
+                "warp" -> {
+                    persistentMapOf(
+                        "amplitude" to ParamChannel.constant(0.03f),
+                        "frequency" to ParamChannel.constant(6f),
+                    )
+                }
+
+                "glitch" -> {
+                    persistentMapOf(
+                        "intensity" to ParamChannel.constant(0.6f),
+                        "blockSize" to ParamChannel.constant(0.02f),
+                    )
+                }
+
+                "vectorify" -> {
+                    persistentMapOf("levels" to ParamChannel.constant(8f))
+                }
+
+                else -> {
+                    persistentMapOf(
+                        "tolerance" to ParamChannel.constant(0.2f),
+                        "softness" to ParamChannel.constant(0.1f),
+                    )
+                }
+            }
+        val node =
+            GraphNode(
+                nodeId = effect,
+                schemaId = schemaId,
+                inputs = persistentMapOf("clipSource" to NodeInput.FromNode(previous)),
+                params = params,
+            )
+        nodes = nodes.putting(node.nodeId, node)
+        previous = node.nodeId
+    }
+    return base.copy(
+        nodes =
+            nodes.putting(
+                output.nodeId,
+                output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(previous))),
+            ),
+    )
+}
+
 fun demoEffectsGraph(): NodeGraph {
     val base = NodeGraph.passthrough()
     val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
