@@ -26,6 +26,7 @@ dependencies {
     implementation(project(":core-model"))
     implementation(project(":core-evaluator"))
     implementation(project(":core-platform-api"))
+    implementation(project(":engine-media"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

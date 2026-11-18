@@ -40,7 +40,9 @@ class DagRenderExecutor(
         windowWidth: Int,
         windowHeight: Int,
         ptsUs: Long,
+        playing: Boolean = false,
     ): Boolean {
+        source.setPlaying(playing)
         source.update(ptsUs)
         val viewportWidth =
             plan.tiles
@@ -84,6 +86,7 @@ class DagRenderExecutor(
                                 tileOffsetY = offsetY,
                                 tileScaleX = scaleX,
                                 tileScaleY = scaleY,
+                                textureMatrix = source.textureMatrix(),
                             )
                         } else {
                             passThrough.render(

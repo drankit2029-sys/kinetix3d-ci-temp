@@ -16,4 +16,5 @@ data class RenderTicket(
     val previewScale: Float,
     val generation: Long,
     val graph: NodeGraph = NodeGraph.passthrough(),
+    val playing: Boolean = false,
 )

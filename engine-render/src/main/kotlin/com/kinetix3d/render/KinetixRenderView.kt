@@ -35,6 +35,7 @@ class KinetixRenderView
         private var playheadUs = 0L
         private var lastPostedPlayheadUs = -1L
         private var ticketPosted = false
+        private var isPlaying = false
 
         init {
             renderThread.setSourcePath(findTestMedia())
@@ -61,8 +62,15 @@ class KinetixRenderView
 
         fun setPlayheadUs(ptsUs: Long) {
             playheadUs = ptsUs
-            if (abs(ptsUs - lastPostedPlayheadUs) < PLAYHEAD_THROTTLE_US) return
+            val throttle = if (isPlaying) PLAYING_THROTTLE_US else PLAYHEAD_THROTTLE_US
+            if (abs(ptsUs - lastPostedPlayheadUs) < throttle) return
             lastPostedPlayheadUs = ptsUs
+            if (ticketPosted) postDemoTicket()
+        }
+
+        fun setPlaying(playing: Boolean) {
+            if (isPlaying == playing) return
+            isPlaying = playing
             if (ticketPosted) postDemoTicket()
         }
 
@@ -100,6 +108,7 @@ class KinetixRenderView
                     previewScale = 0.25f,
                     generation = 1L,
                     graph = projectGraph ?: demoClipGraph(),
+                    playing = isPlaying,
                 ),
             )
         }
@@ -132,5 +141,6 @@ class KinetixRenderView
 
         private companion object {
             private const val PLAYHEAD_THROTTLE_US = 33_000L
+            private const val PLAYING_THROTTLE_US = 16_000L
         }
     }

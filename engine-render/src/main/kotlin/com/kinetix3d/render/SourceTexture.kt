@@ -13,8 +13,14 @@ interface SourceTexture {
 
     fun initialize(): Boolean
 
+    /** Tells a video source whether the transport is running (no-op for stills). */
+    fun setPlaying(playing: Boolean) = Unit
+
     /** Updates the source to [ptsUs] (no-op for still/procedural sources). */
     fun update(ptsUs: Long) = Unit
+
+    /** Column-major texture matrix for external sources (null = identity). */
+    fun textureMatrix(): FloatArray? = null
 
     fun release()
 }

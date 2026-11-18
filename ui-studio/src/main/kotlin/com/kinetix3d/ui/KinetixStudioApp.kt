@@ -95,6 +95,7 @@ fun KinetixStudioApp(
     var demoState by remember { mutableStateOf(demoProjectState()) }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
     var effectsEnabled by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
     val demoGraph = remember(effectsEnabled) { if (effectsEnabled) demoEffectsGraph() else demoClipGraph() }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
     MaterialTheme {
@@ -134,6 +135,7 @@ fun KinetixStudioApp(
                         update = { view ->
                             view.setDeviceProfile(deviceProfile ?: DeviceCapabilityProfile.tier2Default())
                             view.setProjectState(demoState, demoGraph)
+                            view.setPlaying(isPlaying)
                             view.setPlayheadUs(playheadUs)
                         },
                         modifier = Modifier.fillMaxSize(),
@@ -163,6 +165,8 @@ fun KinetixStudioApp(
                     project = timelineProject,
                     playheadUs = playheadUs,
                     onPlayheadChange = { playheadUs = it },
+                    isPlaying = isPlaying,
+                    onPlayingChange = { isPlaying = it },
                     selectedClipId = selectedClipId,
                     onSelectClip = { selectedClipId = it },
                     onTrimClip = { id, start, end -> demoState = demoState.trimClip(id, start, end) },

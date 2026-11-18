@@ -57,6 +57,7 @@ import com.kinetix3d.model.CompositionGraph
 import com.kinetix3d.model.PolygonClipPayload
 import com.kinetix3d.model.PreCompClipPayload
 import com.kinetix3d.model.TextClipPayload
+import com.kinetix3d.render.playback.PlaybackClock
 import java.util.Locale
 
 private val TimelineBackground = Color(0xFF0B0F14)
@@ -92,6 +93,7 @@ data class TimelineProjectUi(
     val name: String,
     val durationUs: Long,
     val tracks: List<TimelineTrackUi>,
+    val fps: Double = 60.0,
 )
 
 fun demoTimelineProject(): TimelineProjectUi {
@@ -99,6 +101,7 @@ fun demoTimelineProject(): TimelineProjectUi {
     return TimelineProjectUi(
         name = "Demo Edit",
         durationUs = 24 * second,
+        fps = 60.0,
         tracks =
             listOf(
                 TimelineTrackUi(
@@ -155,7 +158,12 @@ fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
                 clips = clipsUi,
             )
         }
-    return TimelineProjectUi(name = name, durationUs = duration, tracks = tracksUi)
+    return TimelineProjectUi(
+        name = name,
+        durationUs = duration,
+        tracks = tracksUi,
+        fps = settings.fps,
+    )
 }
 
 private fun clipLabel(clip: ClipNode): String =
@@ -171,15 +179,21 @@ fun TimelinePanel(
     project: TimelineProjectUi,
     playheadUs: Long,
     onPlayheadChange: (Long) -> Unit,
+    isPlaying: Boolean,
+    onPlayingChange: (Boolean) -> Unit,
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
-    var isPlaying by remember { mutableStateOf(false) }
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
     val scrollState = rememberScrollState()
     val currentPlayhead by rememberUpdatedState(playheadUs)
+    val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
+    val currentOnPlayingChange by rememberUpdatedState(onPlayingChange)
+    val clock = remember { PlaybackClock(project.durationUs, project.fps) }
+    clock.durationUs = project.durationUs
+    clock.frameRate = project.fps
     val durationUs = project.durationUs.coerceAtLeast(1_000_000L)
     val timelineWidth = ((durationUs / 1_000_000f) * pxPerSecond).dp
     val trackHeight = 44.dp
@@ -192,16 +206,18 @@ fun TimelinePanel(
             .firstOrNull { it.id == selectedClipId }
 
     LaunchedEffect(isPlaying) {
-        if (!isPlaying) return@LaunchedEffect
-        var lastNanos = 0L
+        if (!isPlaying) {
+            clock.pause(System.nanoTime())
+            return@LaunchedEffect
+        }
+        val startNanos = System.nanoTime()
+        clock.seekTo(currentPlayhead, startNanos)
+        clock.play(startNanos)
         while (isPlaying) {
-            withFrameNanos { now ->
-                if (lastNanos != 0L) {
-                    val next = (currentPlayhead + (now - lastNanos) / 1_000L).coerceAtMost(durationUs)
-                    onPlayheadChange(next)
-                    if (next >= durationUs) isPlaying = false
-                }
-                lastNanos = now
+            withFrameNanos { frameNanos ->
+                val next = clock.framePtsUsAt(frameNanos)
+                currentOnPlayheadChange(next)
+                if (!clock.isPlaying) currentOnPlayingChange(false)
             }
         }
     }
@@ -228,7 +244,7 @@ fun TimelinePanel(
             )
             Spacer(Modifier.width(8.dp))
             Button(
-                onClick = { isPlaying = !isPlaying },
+                onClick = { onPlayingChange(!isPlaying) },
                 modifier = Modifier.height(40.dp),
             ) {
                 Text(if (isPlaying) "Pause" else "Play")
@@ -338,7 +354,10 @@ fun TimelinePanel(
                 TimelineCanvas(
                     project = project,
                     playheadUs = playheadUs,
-                    onPlayheadChange = onPlayheadChange,
+                    onPlayheadChange = { pts ->
+                        clock.seekTo(pts, System.nanoTime())
+                        onPlayheadChange(pts)
+                    },
                     selectedClipId = selectedClipId,
                     onSelectClip = onSelectClip,
                     onTrimClip = onTrimClip,

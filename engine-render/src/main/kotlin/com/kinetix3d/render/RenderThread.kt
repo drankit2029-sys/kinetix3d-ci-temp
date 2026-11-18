@@ -10,10 +10,12 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
+import com.kinetix3d.media.DecoderPool
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.render.plan.DagRenderPlanner
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class RenderThread(
@@ -22,6 +24,7 @@ class RenderThread(
     private val thread = HandlerThread(THREAD_NAME).apply { start() }
     private val handler = Handler(thread.looper)
     private val pendingTicket = AtomicReference<RenderTicket?>(null)
+    private val frameRequested = AtomicBoolean(false)
     private val planner = DagRenderPlanner()
     private val renderLock = DirtyRenderLock(File(filesDir, DirtyRenderLock.DIRECTORY_NAME))
 
@@ -37,6 +40,7 @@ class RenderThread(
     private var renderer: TestPatternRenderer? = null
     private var executor: DagRenderExecutor? = null
     private var pool: ReferenceCountedFboPool? = null
+    private var decoderPool: DecoderPool? = null
     private var surface: Surface? = null
     private var width = 1
     private var height = 1
@@ -86,6 +90,16 @@ class RenderThread(
         handler.post { renderFrame() }
     }
 
+    /** Coalesced re-render triggered by a decoded video frame. */
+    private fun requestFrame() {
+        if (!frameRequested.compareAndSet(false, true)) return
+        handler.post {
+            frameRequested.set(false)
+            lastTicket?.let { pendingTicket.compareAndSet(null, it) }
+            renderFrame()
+        }
+    }
+
     private fun initializeGl() {
         releaseGl()
         val core = EglCore()
@@ -119,11 +133,23 @@ class RenderThread(
         Log.d(TAG, "EGL ready es3=${core.isEs3}")
         if (core.isEs3) {
             val path = sourcePath
+            val decoders = (profile?.maxHwDecoders ?: DEFAULT_HW_DECODERS).coerceAtLeast(1)
+            val decoderLeases = DecoderPool(capacity = decoders, reserved = if (decoders > 1) 1 else 0)
+            decoderPool = decoderLeases
+            Log.d(TAG, "decoder pool capacity=${decoderLeases.capacity} reserved=${decoderLeases.stats().reserved}")
             val source =
                 when {
-                    path == null -> ProceduralSource()
-                    path.endsWith(".mp4", true) || path.endsWith(".mov", true) -> MediaCodecSource(path)
-                    else -> MediaSource(path)
+                    path == null -> {
+                        ProceduralSource()
+                    }
+
+                    path.endsWith(".mp4", true) || path.endsWith(".mov", true) -> {
+                        MediaCodecSource(path, decoderLeases) { requestFrame() }
+                    }
+
+                    else -> {
+                        MediaSource(path)
+                    }
                 }
             val dag = DagRenderExecutor(fboPool, source)
             if (runCatching { dag.initialize() }.getOrDefault(false)) {
@@ -156,7 +182,15 @@ class RenderThread(
                     )
                 }.getOrNull()
             if (plan != null) {
-                val rendered = executor?.render(plan, ticket.graph, width, height, ticket.ptsUs) ?: false
+                val rendered =
+                    executor?.render(
+                        plan = plan,
+                        graph = ticket.graph,
+                        windowWidth = width,
+                        windowHeight = height,
+                        ptsUs = ticket.ptsUs,
+                        playing = ticket.playing,
+                    ) ?: false
                 if (rendered && core.swapBuffers()) {
                     hasRenderedTicket = true
                     runCatching { renderLock.clearAfterSwap() }
@@ -186,8 +220,11 @@ class RenderThread(
     }
 
     private fun releaseGl() {
+        runCatching { eglCore?.makeCurrent() }
         executor?.close()
         executor = null
+        decoderPool?.close()
+        decoderPool = null
         renderer?.release()
         renderer = null
         pool?.close()
@@ -207,5 +244,6 @@ class RenderThread(
     companion object {
         private const val TAG = "KinetixRenderThread"
         private const val THREAD_NAME = "KinetixRenderThread"
+        private const val DEFAULT_HW_DECODERS = 4
     }
 }
