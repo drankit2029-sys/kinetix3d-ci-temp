@@ -46,6 +46,7 @@ import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.render.KinetixRenderView
+import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -88,6 +89,9 @@ fun KinetixStudioApp(
     renderGuard: DirtyRenderLock.Inspection? = null,
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
+    val demoState = remember { demoProjectState() }
+    val demoGraph = remember { demoClipGraph() }
+    val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
     MaterialTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -124,6 +128,8 @@ fun KinetixStudioApp(
                         factory = { context -> KinetixRenderView(context) },
                         update = { view ->
                             view.setDeviceProfile(deviceProfile ?: DeviceCapabilityProfile.tier2Default())
+                            view.setProjectState(demoState, demoGraph)
+                            view.setPlayheadUs(playheadUs)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -134,7 +140,7 @@ fun KinetixStudioApp(
                     fontSize = 12.sp,
                 )
                 TimelinePanel(
-                    project = remember { demoTimelineProject() },
+                    project = timelineProject,
                     playheadUs = playheadUs,
                     onPlayheadChange = { playheadUs = it },
                     modifier =

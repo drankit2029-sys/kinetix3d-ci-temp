@@ -14,15 +14,12 @@ import android.view.SurfaceView
 import com.kinetix3d.model.CompSettings
 import com.kinetix3d.model.CompositionGraph
 import com.kinetix3d.model.DeviceCapabilityProfile
-import com.kinetix3d.model.GraphNode
 import com.kinetix3d.model.NodeGraph
-import com.kinetix3d.model.NodeInput
-import com.kinetix3d.model.NodeSchemaIds
-import com.kinetix3d.model.ParamChannel
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.model.TransientOverrideMap
 import kotlinx.collections.immutable.persistentMapOf
 import java.io.File
+import kotlin.math.abs
 
 class KinetixRenderView
     @JvmOverloads
@@ -33,6 +30,10 @@ class KinetixRenderView
         SurfaceHolder.Callback {
         private val renderThread = RenderThread(context.filesDir)
         private var profile = DeviceCapabilityProfile.tier2Default()
+        private var projectState: ProjectState? = null
+        private var projectGraph: NodeGraph? = null
+        private var playheadUs = 0L
+        private var lastPostedPlayheadUs = -1L
         private var ticketPosted = false
 
         init {
@@ -42,8 +43,26 @@ class KinetixRenderView
         }
 
         fun setDeviceProfile(profile: DeviceCapabilityProfile) {
+            if (this.profile == profile) return
             this.profile = profile
             renderThread.setProfile(profile)
+            if (ticketPosted) postDemoTicket()
+        }
+
+        fun setProjectState(
+            state: ProjectState,
+            graph: NodeGraph,
+        ) {
+            if (projectState == state && projectGraph == graph) return
+            projectState = state
+            projectGraph = graph
+            if (ticketPosted) postDemoTicket()
+        }
+
+        fun setPlayheadUs(ptsUs: Long) {
+            playheadUs = ptsUs
+            if (abs(ptsUs - lastPostedPlayheadUs) < PLAYHEAD_THROTTLE_US) return
+            lastPostedPlayheadUs = ptsUs
             if (ticketPosted) postDemoTicket()
         }
 
@@ -72,26 +91,29 @@ class KinetixRenderView
 
         private fun postDemoTicket() {
             ticketPosted = true
-            val settings = CompSettings(width = 3840, height = 2160, fps = 60.0)
-            val state =
-                ProjectState(
-                    projectId = "demo",
-                    settings = settings,
-                    compositions =
-                        persistentMapOf(
-                            "main" to CompositionGraph("main", "Main", settings),
-                        ),
-                    activeCompId = "main",
-                )
+            val state = projectState ?: demoState()
             renderThread.setTicket(
                 RenderTicket(
                     state = state,
                     overrides = TransientOverrideMap.EMPTY,
-                    ptsUs = 0L,
+                    ptsUs = playheadUs,
                     previewScale = 1.0f,
                     generation = 1L,
-                    graph = demoGraph(),
+                    graph = projectGraph ?: demoClipGraph(),
                 ),
+            )
+        }
+
+        private fun demoState(): ProjectState {
+            val settings = CompSettings(width = 3840, height = 2160, fps = 60.0)
+            return ProjectState(
+                projectId = "demo",
+                settings = settings,
+                compositions =
+                    persistentMapOf(
+                        "main" to CompositionGraph("main", "Main", settings),
+                    ),
+                activeCompId = "main",
             )
         }
 
@@ -108,51 +130,7 @@ class KinetixRenderView
                 ?.absolutePath
         }
 
-        private fun demoGraph(): NodeGraph {
-            val base = NodeGraph.passthrough()
-            val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
-            val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
-            val color =
-                GraphNode(
-                    nodeId = "color",
-                    schemaId = "kinetix.color-suite",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(input.nodeId)),
-                    params =
-                        persistentMapOf(
-                            "contrast" to ParamChannel.constant(1.15f),
-                            "saturation" to ParamChannel.constant(1.3f),
-                            "temperature" to ParamChannel.constant(0.1f),
-                        ),
-                )
-            val blur =
-                GraphNode(
-                    nodeId = "blur",
-                    schemaId = "kinetix.blur",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(color.nodeId)),
-                    params = persistentMapOf("radius" to ParamChannel.constant(0.02f)),
-                )
-            val glow =
-                GraphNode(
-                    nodeId = "glow",
-                    schemaId = "kinetix.glow",
-                    inputs = persistentMapOf("clipSource" to NodeInput.FromNode(blur.nodeId)),
-                    params =
-                        persistentMapOf(
-                            "threshold" to ParamChannel.constant(0.8f),
-                            "intensity" to ParamChannel.constant(0.4f),
-                            "radius" to ParamChannel.constant(0.03f),
-                        ),
-                )
-            return base.copy(
-                nodes =
-                    base.nodes
-                        .putting(color.nodeId, color)
-                        .putting(blur.nodeId, blur)
-                        .putting(glow.nodeId, glow)
-                        .putting(
-                            output.nodeId,
-                            output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(glow.nodeId))),
-                        ),
-            )
+        private companion object {
+            private const val PLAYHEAD_THROTTLE_US = 250_000L
         }
     }

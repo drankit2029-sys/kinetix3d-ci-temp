@@ -48,6 +48,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kinetix3d.model.ClipNode
+import com.kinetix3d.model.CompositionGraph
+import com.kinetix3d.model.PolygonClipPayload
+import com.kinetix3d.model.PreCompClipPayload
+import com.kinetix3d.model.TextClipPayload
 import java.util.Locale
 
 private val TimelineBackground = Color(0xFF0B0F14)
@@ -122,6 +127,40 @@ fun demoTimelineProject(): TimelineProjectUi {
             ),
     )
 }
+
+fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
+    val duration = durationUs().coerceAtLeast(1_000_000L)
+    val tracksUi =
+        tracks.mapIndexed { index, track ->
+            val clipsUi =
+                clips.values
+                    .filter { it.trackId == track.trackId }
+                    .sortedBy { it.timelineInUs }
+                    .map { clip ->
+                        TimelineClipUi(
+                            id = clip.clipId,
+                            label = clipLabel(clip),
+                            startUs = clip.timelineInUs,
+                            durationUs = clip.durationUs,
+                            color = ClipColors[index % ClipColors.size],
+                        )
+                    }
+            TimelineTrackUi(
+                name = track.trackId,
+                type = track.type.name,
+                clips = clipsUi,
+            )
+        }
+    return TimelineProjectUi(name = name, durationUs = duration, tracks = tracksUi)
+}
+
+private fun clipLabel(clip: ClipNode): String =
+    when (val payload = clip.payload) {
+        is TextClipPayload -> payload.textSource.text
+        is PolygonClipPayload -> payload.polygonId
+        is PreCompClipPayload -> payload.targetCompId
+        else -> clip.assetId ?: clip.clipId
+    }
 
 @Composable
 fun TimelinePanel(
