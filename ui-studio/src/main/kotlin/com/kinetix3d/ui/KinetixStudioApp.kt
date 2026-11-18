@@ -29,10 +29,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,9 +49,11 @@ import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
+import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.render.demoEffectsGraph
+import kotlinx.coroutines.launch
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -90,14 +94,31 @@ private val studioModules =
 fun KinetixStudioApp(
     deviceProfile: DeviceCapabilityProfile? = null,
     renderGuard: DirtyRenderLock.Inspection? = null,
+    projectStore: ProjectStore? = null,
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
     var effectsEnabled by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
+    var persistenceStatus by remember { mutableStateOf("in-memory demo") }
+    val scope = rememberCoroutineScope()
     val demoGraph = remember(effectsEnabled) { if (effectsEnabled) demoEffectsGraph() else demoClipGraph() }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
+
+    LaunchedEffect(projectStore) {
+        val store = projectStore ?: return@LaunchedEffect
+        val loaded = runCatching { store.load() }.getOrNull()
+        if (loaded == null) {
+            runCatching { store.save(demoState) }
+            persistenceStatus = "new project saved"
+        } else {
+            val recovered = runCatching { store.recover(loaded) }.getOrDefault(loaded)
+            demoState = recovered
+            persistenceStatus = "restored ${recovered.projectId}"
+        }
+    }
+
     MaterialTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -169,12 +190,29 @@ fun KinetixStudioApp(
                     onPlayingChange = { isPlaying = it },
                     selectedClipId = selectedClipId,
                     onSelectClip = { selectedClipId = it },
-                    onTrimClip = { id, start, end -> demoState = demoState.trimClip(id, start, end) },
+                    onTrimClip = { id, start, end ->
+                        val updated = demoState.trimClip(id, start, end)
+                        demoState = updated
+                        val clip = updated.activeComposition().clips[id]
+                        val store = projectStore
+                        if (clip != null && store != null) {
+                            scope.launch {
+                                runCatching { store.recordClipUpdate(updated, clip) }
+                                    .onSuccess { persistenceStatus = "saved" }
+                                    .onFailure { persistenceStatus = "save failed" }
+                            }
+                        }
+                    },
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .height(260.dp)
                             .clip(RoundedCornerShape(12.dp)),
+                )
+                Text(
+                    text = "project: $persistenceStatus",
+                    color = StudioMuted,
+                    fontSize = 11.sp,
                 )
                 SectionLabel(
                     text = "DEVICE",

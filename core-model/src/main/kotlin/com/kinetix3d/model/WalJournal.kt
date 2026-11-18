@@ -75,6 +75,12 @@ object MutationCodec {
     fun decode(bytes: ByteArray): Mutation = proto.decodeFromByteArray(Mutation.serializer(), bytes)
 }
 
+/** One journal row: the sequence id is needed to advance the replay checkpoint. */
+data class WalRecord(
+    val seqId: Long,
+    val mutation: Mutation,
+)
+
 /**
  * Crash-recovery journal contract.
  *
@@ -85,8 +91,11 @@ interface WalJournal {
     /** Appends [mutation] and returns its assigned, strictly increasing sequence id. */
     suspend fun append(mutation: Mutation): Long
 
-    /** Returns every mutation with sequence id strictly greater than [seqId], oldest first. */
-    suspend fun readFrom(seqId: Long): List<Mutation>
+    /** Returns every record with sequence id strictly greater than [seqId], oldest first. */
+    suspend fun readRecordsFrom(seqId: Long): List<WalRecord>
+
+    /** Convenience view of [readRecordsFrom] without the sequence ids. */
+    suspend fun readFrom(seqId: Long): List<Mutation> = readRecordsFrom(seqId).map { it.mutation }
 
     /** Bounded retention: keeps at most [keepLast] newest records, prunes older applied rows. */
     suspend fun checkpoint(keepLast: Int)
@@ -120,9 +129,9 @@ class InMemoryWalJournal(
             seq
         }
 
-    override suspend fun readFrom(seqId: Long): List<Mutation> =
+    override suspend fun readRecordsFrom(seqId: Long): List<WalRecord> =
         mutex.withLock {
-            records.filter { it.first > seqId }.map { it.second }
+            records.filter { it.first > seqId }.map { (seq, mutation) -> WalRecord(seq, mutation) }
         }
 
     override suspend fun checkpoint(keepLast: Int): Unit =

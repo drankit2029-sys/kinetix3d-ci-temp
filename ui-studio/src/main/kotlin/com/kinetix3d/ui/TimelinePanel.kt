@@ -265,7 +265,7 @@ fun TimelinePanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = selectedClip.label,
+                    text = "${selectedClip.label} · ${formatTime(selectedClip.durationUs)}",
                     color = TimelineAccent,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f),

@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Phase 3 media playback: continuous decode, transport clock, decoder ceiling.
-- Phone-verify play/pause/seek with the async decode thread.
+- Phase 3 persistence: `.kproj` snapshots + WAL replay.
+- Phone-verify trim → force-stop → restore.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -18,13 +18,15 @@ Updated: 2026-11-19
 - `DecoderPool` (capacity ceiling + export reservation) with JVM tests; wired into `RenderThread`.
 - Async `MediaCodecSource` decode thread: render thread only latches frames; seek requests are coalesced.
 - Phone-verified: play advances in real time, pause freezes, paused seek and seek-while-playing both update the frame.
+- `.kproj` container (`K3DP` magic + version + CRC32 + protobuf `ProjectState`) with JVM tests.
+- `ProjectStore`: atomic snapshot writes, WAL append on trim, replay + checkpoint on startup; JVM tests.
+- Phone-verified persistence: trimmed "Winter Olympics" to 00:06.500, force-stopped, restarted → "project: restored demo" and 00:06.500 survived.
 
 ## In progress
-- Commit/push/CI for the playback clock + async decoder slice.
+- Commit/push/CI for the persistence slice.
 - Measure sustained 30/60fps playback and decoder-pool stats on the phone.
 
 ## Next
-- Project persistence (`.kproj` + WAL wiring).
 - Hardware export session (uses the reserved decoder slot).
 - Multi-clip decoder scheduling (interval index + pre-seek 1.5s ahead).
 - More operator kernels (Warp, Glitch, Vectorify, Keyer, …).

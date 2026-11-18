@@ -17,6 +17,7 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import com.kinetix3d.model.Mutation
 import com.kinetix3d.model.MutationCodec
 import com.kinetix3d.model.WalJournal
+import com.kinetix3d.model.WalRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -91,7 +92,7 @@ class AndroidWalJournal(
             }
         }
 
-    override suspend fun readFrom(seqId: Long): List<Mutation> =
+    override suspend fun readRecordsFrom(seqId: Long): List<WalRecord> =
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 requireDatabase()
@@ -100,12 +101,12 @@ class AndroidWalJournal(
                             "WHERE $COLUMN_SEQ_ID > ? ORDER BY $COLUMN_SEQ_ID ASC",
                         arrayOf<Any?>(seqId),
                     ).use { cursor ->
-                        val mutations = ArrayList<Mutation>(cursor.count)
+                        val records = ArrayList<WalRecord>(cursor.count)
                         while (cursor.moveToNext()) {
                             val rowSeqId = cursor.getLong(0)
                             val payload = cursor.getBlob(1)
                             try {
-                                mutations.add(MutationCodec.decode(payload))
+                                records.add(WalRecord(rowSeqId, MutationCodec.decode(payload)))
                             } catch (error: Exception) {
                                 throw IllegalStateException(
                                     "Corrupt WAL mutation_proto at seq_id=$rowSeqId",
@@ -113,7 +114,7 @@ class AndroidWalJournal(
                                 )
                             }
                         }
-                        mutations
+                        records
                     }
             }
         }

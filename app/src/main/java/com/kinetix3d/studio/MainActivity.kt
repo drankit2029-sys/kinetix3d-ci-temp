@@ -11,8 +11,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.ui.KinetixStudioApp
 
 class MainActivity : ComponentActivity() {
@@ -24,9 +28,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val deviceProfile by kinetix.deviceProfile.collectAsState()
             val renderGuard by kinetix.renderGuard.collectAsState()
+            val context = LocalContext.current
+            val projectStore = remember { ProjectStore.create(context.applicationContext, "demo") }
+            DisposableEffect(projectStore) {
+                onDispose { projectStore.close() }
+            }
             KinetixStudioApp(
                 deviceProfile = deviceProfile,
                 renderGuard = renderGuard,
+                projectStore = projectStore,
             )
         }
     }
