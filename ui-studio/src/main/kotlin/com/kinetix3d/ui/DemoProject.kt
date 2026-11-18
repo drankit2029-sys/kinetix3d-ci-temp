@@ -105,7 +105,7 @@ fun ProjectState.trimClip(
     val composition = activeComposition()
     val clip = composition.clips[clipId] ?: return this
     val newIn = newInUs.coerceAtLeast(0L)
-    val newOut = newOutUs.coerceAtLeast(newIn + 1L)
+    val newOut = newOutUs.coerceAtLeast(newIn + MIN_CLIP_DURATION_US)
     val deltaIn = newIn - clip.timelineInUs
     val deltaOut = newOut - clip.timelineOutUs
     val newSourceIn = (clip.sourceInUs + deltaIn).coerceAtLeast(0L)

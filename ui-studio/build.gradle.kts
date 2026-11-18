@@ -47,4 +47,8 @@ dependencies {
     implementation(libs.androidx.compose.material3.windowsize)
     implementation(libs.androidx.compose.material.icons.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.junit4)
 }

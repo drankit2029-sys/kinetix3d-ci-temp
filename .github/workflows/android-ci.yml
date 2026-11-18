@@ -46,8 +46,8 @@ jobs:
           # x86_64 runner: drives the NDK for all four ABIs (see engine-media/build.gradle.kts)
           cargo install cargo-ndk --locked
 
-      - name: Unit tests (JVM — model, evaluator & render planner)
-        run: ./gradlew :core-model:test :core-evaluator:test :engine-render:testDebugUnitTest --console=plain
+      - name: Unit tests (JVM — model, evaluator, render planner & timeline)
+        run: ./gradlew :core-model:test :core-evaluator:test :engine-render:testDebugUnitTest :ui-studio:testDebugUnitTest --console=plain
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --console=plain

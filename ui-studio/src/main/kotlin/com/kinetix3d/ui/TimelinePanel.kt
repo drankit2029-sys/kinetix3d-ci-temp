@@ -1,7 +1,8 @@
 /*
  * Kinetix3D Studio — ui-studio
  * Phase 2 timeline surface: tracks, clips, ruler, playhead and transport.
- * The demo model is replaced by ProjectState wiring in the next slice.
+ * Phone-first: clip edges use a 24dp hit target (4dp visual handle); trim is a
+ * coarse horizontal drag, never a precision-only control.
  */
 
 package com.kinetix3d.ui
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -335,6 +337,7 @@ fun TimelinePanel(
                     onPlayheadChange = onPlayheadChange,
                     selectedClipId = selectedClipId,
                     onSelectClip = onSelectClip,
+                    onTrimClip = onTrimClip,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
                     rulerHeight = rulerHeight,
@@ -352,6 +355,7 @@ private fun TimelineCanvas(
     onPlayheadChange: (Long) -> Unit,
     selectedClipId: String?,
     onSelectClip: (String?) -> Unit,
+    onTrimClip: (String, Long, Long) -> Unit,
     pxPerSecond: Float,
     width: Dp,
     rulerHeight: Dp,
@@ -363,27 +367,85 @@ private fun TimelineCanvas(
     val widthPx = with(density) { width.toPx() }
     val rulerPx = with(density) { rulerHeight.toPx() }
     val trackPx = with(density) { trackHeight.toPx() }
+    val edgeHitPx = with(density) { TRIM_EDGE_HIT_DP.dp.toPx() }
     val totalHeight = rulerPx + trackPx * project.tracks.size
+    val currentProject by rememberUpdatedState(project)
+    val currentOnSelectClip by rememberUpdatedState(onSelectClip)
+    val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
+    val currentOnTrimClip by rememberUpdatedState(onTrimClip)
+    var trimHit by remember { mutableStateOf<ClipEdgeHit?>(null) }
+    var trimStartUs by remember { mutableLongStateOf(0L) }
+    var trimEndUs by remember { mutableLongStateOf(0L) }
+    var trimDeltaUs by remember { mutableLongStateOf(0L) }
+
     Canvas(
         modifier =
             Modifier
                 .width(width)
                 .height(with(density) { totalHeight.toDp() })
-                .pointerInput(durationUs, widthPx, project) {
+                .pointerInput(durationUs, widthPx) {
                     detectTapGestures { offset ->
-                        val hit = hitTestClip(offset, project, widthPx, rulerPx, trackPx, durationUs)
+                        val hit =
+                            hitTestClip(
+                                x = offset.x,
+                                y = offset.y,
+                                project = currentProject,
+                                widthPx = widthPx,
+                                rulerPx = rulerPx,
+                                trackPx = trackPx,
+                                durationUs = durationUs,
+                            )
                         if (hit != null) {
-                            onSelectClip(hit.id)
+                            currentOnSelectClip(hit.id)
                         } else {
-                            onSelectClip(null)
-                            onPlayheadChange(xToUs(offset.x, widthPx, durationUs))
+                            currentOnSelectClip(null)
+                            currentOnPlayheadChange(xToUs(offset.x, widthPx, durationUs))
                         }
                     }
-                }.pointerInput(durationUs, widthPx) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        onPlayheadChange(xToUs(change.position.x, widthPx, durationUs))
-                    }
+                }.pointerInput(durationUs, widthPx, edgeHitPx) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val hit =
+                                hitTestClipEdge(
+                                    x = offset.x,
+                                    y = offset.y,
+                                    project = currentProject,
+                                    widthPx = widthPx,
+                                    rulerPx = rulerPx,
+                                    trackPx = trackPx,
+                                    durationUs = durationUs,
+                                    edgeHitPx = edgeHitPx,
+                                )
+                            if (hit != null) {
+                                trimHit = hit
+                                trimStartUs = hit.clip.startUs
+                                trimEndUs = hit.clip.startUs + hit.clip.durationUs
+                                trimDeltaUs = 0L
+                                currentOnSelectClip(hit.clip.id)
+                            } else {
+                                trimHit = null
+                            }
+                        },
+                        onDragEnd = { trimHit = null },
+                        onDragCancel = { trimHit = null },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val hit = trimHit
+                            if (hit != null) {
+                                trimDeltaUs += (dragAmount.x / widthPx * durationUs.toFloat()).toLong()
+                                val (newStart, newEnd) =
+                                    trimRange(
+                                        startUs = trimStartUs,
+                                        endUs = trimEndUs,
+                                        deltaUs = trimDeltaUs,
+                                        edge = hit.edge,
+                                    )
+                                currentOnTrimClip(hit.clip.id, newStart, newEnd)
+                            } else {
+                                currentOnPlayheadChange(xToUs(change.position.x, widthPx, durationUs))
+                            }
+                        },
+                    )
                 },
     ) {
         drawRect(TimelineTrack, size = Size(size.width, rulerPx))
@@ -426,6 +488,17 @@ private fun TimelineCanvas(
                         cornerRadius = CornerRadius(6f, 6f),
                         style = Stroke(width = 2f),
                     )
+                    val handleWidth = 4.dp.toPx()
+                    drawRect(
+                        color = Color.White,
+                        topLeft = Offset(left + 1f, rectTop),
+                        size = Size(handleWidth, rectBottom - rectTop),
+                    )
+                    drawRect(
+                        color = Color.White,
+                        topLeft = Offset(right - 1f - handleWidth, rectTop),
+                        size = Size(handleWidth, rectBottom - rectTop),
+                    )
                 }
                 val layout =
                     textMeasurer.measure(
@@ -438,34 +511,6 @@ private fun TimelineCanvas(
         val playheadX = (playheadUs.toFloat() / durationUs.toFloat()) * size.width
         drawLine(TimelineAccent, Offset(playheadX, 0f), Offset(playheadX, size.height), strokeWidth = 2f)
         drawCircle(TimelineAccent, radius = 5f, center = Offset(playheadX, 2f))
-    }
-}
-
-private fun xToUs(
-    x: Float,
-    widthPx: Float,
-    durationUs: Long,
-): Long {
-    if (widthPx <= 0f) return 0L
-    val fraction = (x.coerceIn(0f, widthPx) / widthPx)
-    return (fraction * durationUs).toLong().coerceIn(0L, durationUs)
-}
-
-private fun hitTestClip(
-    offset: Offset,
-    project: TimelineProjectUi,
-    widthPx: Float,
-    rulerPx: Float,
-    trackPx: Float,
-    durationUs: Long,
-): TimelineClipUi? {
-    if (offset.y < rulerPx || widthPx <= 0f) return null
-    val trackIndex = ((offset.y - rulerPx) / trackPx).toInt()
-    val track = project.tracks.getOrNull(trackIndex) ?: return null
-    return track.clips.firstOrNull { clip ->
-        val left = (clip.startUs.toFloat() / durationUs.toFloat()) * widthPx
-        val right = ((clip.startUs + clip.durationUs).toFloat() / durationUs.toFloat()) * widthPx
-        offset.x in left..right
     }
 }
 
