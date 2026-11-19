@@ -66,7 +66,18 @@ class RenderThread(
     }
 
     fun setSourcePath(path: String?) {
-        sourcePath = path
+        handler.post {
+            if (sourcePath == path) return@post
+            sourcePath = path
+            runCatching { eglCore?.makeCurrent() }
+            executor?.close()
+            executor = null
+            decoderPool?.close()
+            decoderPool = null
+            createSource()
+            lastTicket?.let { pendingTicket.set(it) }
+            renderFrame()
+        }
     }
 
     fun setTicket(ticket: RenderTicket) {
@@ -143,37 +154,43 @@ class RenderThread(
         pool = fboPool
         hasRenderedTicket = false
         Log.d(TAG, "EGL ready es3=${core.isEs3}")
-        if (core.isEs3) {
-            val path = sourcePath
-            val decoders = (profile?.maxHwDecoders ?: DEFAULT_HW_DECODERS).coerceAtLeast(1)
-            val decoderLeases = DecoderPool(capacity = decoders, reserved = if (decoders > 1) 1 else 0)
-            decoderPool = decoderLeases
-            Log.d(TAG, "decoder pool capacity=${decoderLeases.capacity} reserved=${decoderLeases.stats().reserved}")
-            val source =
-                when {
-                    path == null -> {
-                        ProceduralSource()
-                    }
-
-                    path.endsWith(".mp4", true) || path.endsWith(".mov", true) -> {
-                        MediaCodecSource(path, decoderLeases) { requestFrame() }
-                    }
-
-                    else -> {
-                        MediaSource(path)
-                    }
-                }
-            val dag = DagRenderExecutor(fboPool, source)
-            if (runCatching { dag.initialize() }.getOrDefault(false)) {
-                executor = dag
-            } else {
-                Log.e(TAG, "DAG executor initialization failed; using test pattern")
-                dag.close()
-            }
-        } else {
-            Log.w(TAG, "ES2 context; DAG executor disabled")
-        }
+        createSource()
         renderFrame()
+    }
+
+    private fun createSource() {
+        val core = eglCore ?: return
+        val fboPool = pool ?: return
+        if (!core.isEs3) {
+            Log.w(TAG, "ES2 context; DAG executor disabled")
+            return
+        }
+        val path = sourcePath
+        val decoders = (profile?.maxHwDecoders ?: DEFAULT_HW_DECODERS).coerceAtLeast(1)
+        val decoderLeases = DecoderPool(capacity = decoders, reserved = if (decoders > 1) 1 else 0)
+        decoderPool = decoderLeases
+        Log.d(TAG, "decoder pool capacity=${decoderLeases.capacity} reserved=${decoderLeases.stats().reserved}")
+        val source =
+            when {
+                path == null -> {
+                    ProceduralSource()
+                }
+
+                path.endsWith(".mp4", true) || path.endsWith(".mov", true) -> {
+                    MediaCodecSource(path, decoderLeases) { requestFrame() }
+                }
+
+                else -> {
+                    MediaSource(path)
+                }
+            }
+        val dag = DagRenderExecutor(fboPool, source)
+        if (runCatching { dag.initialize() }.getOrDefault(false)) {
+            executor = dag
+        } else {
+            Log.e(TAG, "DAG executor initialization failed; using test pattern")
+            dag.close()
+        }
     }
 
     private fun renderFrame() {

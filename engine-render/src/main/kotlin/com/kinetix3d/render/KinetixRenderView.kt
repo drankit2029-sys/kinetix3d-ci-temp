@@ -47,6 +47,10 @@ class KinetixRenderView
             holder.setFormat(PixelFormat.RGBA_8888)
         }
 
+        fun setSourcePath(path: String?) {
+            renderThread.setSourcePath(path)
+        }
+
         fun setDeviceProfile(profile: DeviceCapabilityProfile) {
             if (this.profile == profile) return
             this.profile = profile

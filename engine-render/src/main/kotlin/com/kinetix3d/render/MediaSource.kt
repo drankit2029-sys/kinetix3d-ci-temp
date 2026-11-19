@@ -8,6 +8,7 @@ package com.kinetix3d.render
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.MediaMetadataRetriever
 import android.opengl.GLES20
 import android.opengl.GLUtils
@@ -22,22 +23,30 @@ class MediaSource(
 
     override fun initialize(): Boolean {
         val bitmap = loadBitmap() ?: return false
+        val flipped = flipVertically(bitmap)
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)
         textureId = textures[0]
         if (textureId == 0) {
-            bitmap.recycle()
+            flipped.recycle()
+            if (flipped !== bitmap) bitmap.recycle()
             return false
         }
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, flipped, 0)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
-        bitmap.recycle()
+        flipped.recycle()
+        if (flipped !== bitmap) bitmap.recycle()
         return true
+    }
+
+    private fun flipVertically(bitmap: Bitmap): Bitmap {
+        val matrix = Matrix().apply { postScale(1f, -1f) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
     override fun release() {

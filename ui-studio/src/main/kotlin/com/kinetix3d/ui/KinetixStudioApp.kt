@@ -10,6 +10,8 @@
 package com.kinetix3d.ui
 
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -143,10 +145,52 @@ fun KinetixStudioApp(
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var renderStats by remember { mutableStateOf(RenderStats()) }
+    var importStatus by remember { mutableStateOf<String?>(null) }
+    var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exportProgress = remember { MutableStateFlow(0f) }
     val progress by exportProgress.collectAsState()
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }
+    var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
     val scope = rememberCoroutineScope()
+    val importLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    val imported =
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val mime = context.contentResolver.getType(uri).orEmpty()
+                                val extension =
+                                    when {
+                                        mime.contains("png") -> "png"
+                                        mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
+                                        mime.contains("quicktime") -> "mov"
+                                        else -> "mp4"
+                                    }
+                                val target =
+                                    File(
+                                        context.getExternalFilesDir(null),
+                                        "kinetix-import-${System.currentTimeMillis()}.$extension",
+                                    )
+                                context.contentResolver.openInputStream(uri)?.use { input ->
+                                    target.outputStream().use { output -> input.copyTo(output) }
+                                } ?: error("Unable to open the selected file")
+                                target.absolutePath
+                            }
+                        }
+                    imported
+                        .onSuccess { path ->
+                            activeMediaPath = path
+                            prefs.edit().putString("source_path", path).apply()
+                            renderView?.setSourcePath(path)
+                            importStatus = "imported"
+                        }.onFailure { error ->
+                            importStatus = "import failed: ${error.message}"
+                        }
+                }
+            }
+        }
     val demoGraph =
         remember(selectedEffects) {
             when {
@@ -354,6 +398,8 @@ fun KinetixStudioApp(
                         factory = { context ->
                             KinetixRenderView(context).also { view ->
                                 view.onStats = { stats -> renderStats = stats }
+                                renderView = view
+                                view.setSourcePath(activeMediaPath)
                             }
                         },
                         update = { view ->
@@ -361,6 +407,7 @@ fun KinetixStudioApp(
                             view.setProjectState(demoState, demoGraph)
                             view.setPlaying(isPlaying)
                             view.setPlayheadUs(playheadUs)
+                            view.setSourcePath(activeMediaPath)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -375,6 +422,13 @@ fun KinetixStudioApp(
                         "preview ${renderStats.fps.roundToInt()} fps · " +
                             "${String.format(Locale.US, "%.1f", renderStats.frameMillis)} ms · " +
                             "${renderStats.tiles} tiles ${renderStats.format}",
+                    color = StudioMuted,
+                    fontSize = 11.sp,
+                )
+                Text(
+                    text =
+                        "source: ${activeMediaPath?.let { File(it).name } ?: "procedural"}" +
+                            (importStatus?.let { " · $it" } ?: ""),
                     color = StudioMuted,
                     fontSize = 11.sp,
                 )
@@ -414,9 +468,15 @@ fun KinetixStudioApp(
                     Button(
                         onClick = {
                             val api = platformApi
-                            val path = mediaPath
+                            val path = activeMediaPath
                             if (api == null || path == null) {
                                 exportStatus = "export unavailable (no media)"
+                                return@Button
+                            }
+                            if (path.endsWith(".png", true) || path.endsWith(".jpg", true) ||
+                                path.endsWith(".jpeg", true)
+                            ) {
+                                exportStatus = "export needs a video source"
                                 return@Button
                             }
                             scope.launch {
@@ -471,6 +531,12 @@ fun KinetixStudioApp(
                         modifier = Modifier.height(40.dp),
                     ) {
                         Text(if (exportStatus == "exporting…") "Exporting…" else "Export 3s")
+                    }
+                    Button(
+                        onClick = { importLauncher.launch(arrayOf("video/*", "image/*")) },
+                        modifier = Modifier.height(40.dp),
+                    ) {
+                        Text("Import")
                     }
                     Text(
                         text = exportStatus ?: "hardware H.264 · 1080p",

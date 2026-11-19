@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Undo/redo for timeline edits, persisted through the WAL.
-- Phone-verify undo/redo and restart.
+- Media import: SAF picker → app storage → live preview source.
+- Phone-verify image import, orientation and restart persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -34,9 +34,12 @@ Updated: 2026-11-19
 - Phone-verified readout while playing: `preview 48 fps · 6.9 ms · 1 tiles RGBA16F` on the scrcpy virtual display.
 - Undo/redo: 50-entry in-memory stacks, Undo/Redo buttons, Ctrl+Z / Ctrl+Shift+Z, and `ProjectMutationCodec.replaceState` full-state checkpoints persisted through the WAL.
 - Phone-verified: delete → Undo restored the clip → Redo deleted it again → restart kept the redo state.
+- Media import: `OpenDocument` picker, copy to app external files, `KinetixRenderView.setSourcePath` recreates the decode source, path persisted in SharedPreferences, Import button + source label.
+- Fixed still-image orientation by flipping the bitmap before `GLUtils.texImage2D`.
+- Phone-verified on display 8: imported a PNG through the picker, preview switched upright, source label showed the imported file, and the path survived a restart.
 
 ## In progress
-- Commit/push/CI for the undo/redo slice.
+- Commit/push/CI for the media-import slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next
