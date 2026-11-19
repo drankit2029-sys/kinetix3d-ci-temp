@@ -67,6 +67,7 @@ import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
+import com.kinetix3d.render.RenderStats
 import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.render.demoKernelGraph
@@ -76,6 +77,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
+import kotlin.math.roundToInt
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
 import com.kinetix3d.media.ModuleInfo as EngineMedia
@@ -133,6 +136,7 @@ fun KinetixStudioApp(
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var exportStatus by remember { mutableStateOf<String?>(null) }
+    var renderStats by remember { mutableStateOf(RenderStats()) }
     val exportProgress = remember { MutableStateFlow(0f) }
     val progress by exportProgress.collectAsState()
     val context = LocalContext.current
@@ -295,7 +299,11 @@ fun KinetixStudioApp(
                             .clip(RoundedCornerShape(12.dp)),
                 ) {
                     AndroidView(
-                        factory = { context -> KinetixRenderView(context) },
+                        factory = { context ->
+                            KinetixRenderView(context).also { view ->
+                                view.onStats = { stats -> renderStats = stats }
+                            }
+                        },
                         update = { view ->
                             view.setDeviceProfile(deviceProfile ?: DeviceCapabilityProfile.tier2Default())
                             view.setProjectState(demoState, demoGraph)
@@ -309,6 +317,14 @@ fun KinetixStudioApp(
                     text = "4K SOURCE — 960p PREVIEW · $effectLabel",
                     color = StudioMuted,
                     fontSize = 12.sp,
+                )
+                Text(
+                    text =
+                        "preview ${renderStats.fps.roundToInt()} fps · " +
+                            "${String.format(Locale.US, "%.1f", renderStats.frameMillis)} ms · " +
+                            "${renderStats.tiles} tiles ${renderStats.format}",
+                    color = StudioMuted,
+                    fontSize = 11.sp,
                 )
                 Row(
                     modifier =

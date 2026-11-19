@@ -14,6 +14,7 @@ import com.kinetix3d.media.DecoderPool
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.render.plan.DagRenderPlanner
+import com.kinetix3d.render.plan.RenderPlan
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -47,6 +48,17 @@ class RenderThread(
     private var generation = 0L
     private var lastFrameNanos = 0L
     private var hasRenderedTicket = false
+    private var lastRenderNanos = 0L
+    private var emaFrameNanos = 0.0
+    private var emaFps = 0.0
+    private var lastStatsPostNanos = 0L
+
+    @Volatile
+    private var statsListener: ((RenderStats) -> Unit)? = null
+
+    fun setStatsListener(listener: ((RenderStats) -> Unit)?) {
+        statsListener = listener
+    }
 
     fun setProfile(profile: DeviceCapabilityProfile) {
         this.profile = profile
@@ -169,6 +181,7 @@ class RenderThread(
         val pattern = renderer ?: return
         val fboPool = pool ?: return
         if (!core.makeCurrent()) return
+        val startNanos = System.nanoTime()
 
         val ticket = pendingTicket.getAndSet(null)
         if (ticket != null) {
@@ -194,6 +207,7 @@ class RenderThread(
                 if (rendered && core.swapBuffers()) {
                     hasRenderedTicket = true
                     runCatching { renderLock.clearAfterSwap() }
+                    recordFrame(startNanos, plan)
                     return
                 }
             }
@@ -214,9 +228,40 @@ class RenderThread(
         val drawn = pattern.drawToWindow(fboPool, width, height, timeSeconds, core.isEs3)
         if (drawn && core.swapBuffers()) {
             runCatching { renderLock.clearAfterSwap() }
+            recordFrame(startNanos, null)
         } else {
             Log.w(TAG, "frame draw/swap failed")
         }
+    }
+
+    private fun recordFrame(
+        startNanos: Long,
+        plan: RenderPlan?,
+    ) {
+        val now = System.nanoTime()
+        val frameNanos = (now - startNanos).coerceAtLeast(0L)
+        emaFrameNanos =
+            if (emaFrameNanos == 0.0) {
+                frameNanos.toDouble()
+            } else {
+                emaFrameNanos * 0.9 + frameNanos * 0.1
+            }
+        if (lastRenderNanos != 0L) {
+            val interval = (now - lastRenderNanos).coerceAtLeast(1L)
+            val fps = 1_000_000_000.0 / interval
+            emaFps = if (emaFps == 0.0) fps else emaFps * 0.9 + fps * 0.1
+        }
+        lastRenderNanos = now
+        if (now - lastStatsPostNanos < STATS_INTERVAL_NANOS) return
+        lastStatsPostNanos = now
+        statsListener?.invoke(
+            RenderStats(
+                fps = emaFps.toFloat(),
+                frameMillis = (emaFrameNanos / 1_000_000.0).toFloat(),
+                tiles = plan?.tiles?.size ?: 0,
+                format = plan?.format?.name.orEmpty(),
+            ),
+        )
     }
 
     private fun releaseGl() {
@@ -245,5 +290,6 @@ class RenderThread(
         private const val TAG = "KinetixRenderThread"
         private const val THREAD_NAME = "KinetixRenderThread"
         private const val DEFAULT_HW_DECODERS = 4
+        private const val STATS_INTERVAL_NANOS = 250_000_000L
     }
 }

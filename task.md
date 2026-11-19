@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- NLE tools: split at playhead, delete clip, keyboard transport.
-- Phone-verify split/delete persistence.
+- Preview telemetry: FPS, render time, tile count, format.
+- Phone-verify sustained playback numbers.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -30,10 +30,12 @@ Updated: 2026-11-19
 - Split/Delete buttons in the selected-clip row; seeking no longer clears the selection; tapping the selected clip toggles it off.
 - Keyboard transport: C cycles clips, S splits, Del/Backspace deletes, Space toggles play, Home/Left/Right seek by 0.5s.
 - Phone-verified on the scrcpy virtual display: split Title at 2.5s, restart → both halves survived; delete right half, restart → deletion survived.
+- `RenderStats` telemetry: EMA FPS, frame time, tile count and format posted to the UI every 250ms.
+- Phone-verified readout while playing: `preview 48 fps · 6.9 ms · 1 tiles RGBA16F` on the scrcpy virtual display.
 
 ## In progress
-- Commit/push/CI for the split/delete slice.
-- Measure sustained 30/60fps playback and decoder-pool stats on the phone.
+- Commit/push/CI for the telemetry slice.
+- Measure sustained 30/60fps playback on the main display when available.
 
 ## Next
 - Multi-clip decoder scheduling (interval index + pre-seek 1.5s ahead).

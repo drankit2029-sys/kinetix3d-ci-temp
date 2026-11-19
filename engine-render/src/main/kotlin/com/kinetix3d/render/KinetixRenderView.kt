@@ -37,8 +37,12 @@ class KinetixRenderView
         private var ticketPosted = false
         private var isPlaying = false
 
+        /** Preview telemetry callback, delivered on the UI thread. */
+        var onStats: ((RenderStats) -> Unit)? = null
+
         init {
             renderThread.setSourcePath(findTestMedia(context))
+            renderThread.setStatsListener { stats -> post { onStats?.invoke(stats) } }
             holder.addCallback(this)
             holder.setFormat(PixelFormat.RGBA_8888)
         }
