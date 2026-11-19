@@ -42,6 +42,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -50,6 +51,8 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kinetix3d.model.ClipNode
@@ -193,6 +196,7 @@ fun TimelinePanel(
     onSplitClip: (String) -> Unit = {},
     onDeleteClip: (String) -> Unit = {},
     onDetachAudio: (String) -> Unit = {},
+    thumbnails: Map<String, ImageBitmap> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
@@ -399,6 +403,7 @@ fun TimelinePanel(
                     selectedClipId = selectedClipId,
                     onSelectClip = onSelectClip,
                     onTrimClip = onTrimClip,
+                    thumbnails = thumbnails,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
                     rulerHeight = rulerHeight,
@@ -419,6 +424,7 @@ private fun TimelineCanvas(
     selectedClipId: String?,
     onSelectClip: (String?) -> Unit,
     onTrimClip: (String, Long, Long) -> Unit,
+    thumbnails: Map<String, ImageBitmap>,
     pxPerSecond: Float,
     width: Dp,
     rulerHeight: Dp,
@@ -544,6 +550,23 @@ private fun TimelineCanvas(
                     size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
                     cornerRadius = CornerRadius(6f, 6f),
                 )
+                val thumb = thumbnails[clip.id]
+                if (thumb != null) {
+                    val clipWidth = (right - left - 2f).coerceAtLeast(2f)
+                    val clipHeight = (rectBottom - rectTop).coerceAtLeast(1f)
+                    val thumbWidth =
+                        (clipHeight * thumb.width / thumb.height)
+                            .coerceAtMost(clipWidth)
+                            .coerceAtLeast(1f)
+                    drawImage(
+                        image = thumb,
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(thumb.width, thumb.height),
+                        dstOffset = IntOffset((left + 1f).toInt(), rectTop.toInt()),
+                        dstSize = IntSize(thumbWidth.toInt(), clipHeight.toInt()),
+                        alpha = 0.55f,
+                    )
+                }
                 if (clip.id == selectedClipId) {
                     drawRoundRect(
                         color = Color.White,
@@ -569,6 +592,11 @@ private fun TimelineCanvas(
                         text = clip.label,
                         style = TextStyle(color = Color.White, fontSize = 9.sp),
                     )
+                drawRect(
+                    color = Color(0x99000000),
+                    topLeft = Offset(left + 4f, rectTop + 2f),
+                    size = Size(layout.size.width + 8f, layout.size.height + 4f),
+                )
                 drawText(layout, topLeft = Offset(left + 6f, rectTop + 4f))
             }
         }

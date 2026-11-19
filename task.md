@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Project settings: resolution + frame rate dialog, adaptive preview scale.
-- Phone-verify settings persistence.
+- Timeline thumbnails on video clips.
+- Phone-verify thumbnails and label scrim.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -51,9 +51,11 @@ Updated: 2026-11-19
 - Phone-verified: set in=1.0s/out=3.0s, exported 120 frames; MediaStore reports 1920×1080, 2000ms, 2.98MB.
 - Project settings dialog: 1080p/4K and 30/60 fps, persisted as a full-state checkpoint; preview scale adapts (4K→0.25, 1080p→0.5); label shows resolution, fps and preview height.
 - Phone-verified: switched to 1920×1080 / 30 fps, label updated to `1920×1080 · 30 fps · 540p PREVIEW`, restart kept the settings.
+- Timeline thumbnails: `MediaMetadataRetriever` frames at each video clip's midpoint, scaled to 64px, drawn at 55% opacity with a dark label scrim.
+- Phone-verified: V1 clips show distinct thumbnails; audio clips stay flat; labels remain readable.
 
 ## In progress
-- Commit/push/CI for the project-settings slice.
+- Commit/push/CI for the thumbnail slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

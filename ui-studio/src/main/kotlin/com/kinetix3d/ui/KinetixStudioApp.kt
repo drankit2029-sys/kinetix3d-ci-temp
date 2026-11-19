@@ -10,6 +10,8 @@
 package com.kinetix3d.ui
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -56,6 +58,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -112,6 +116,28 @@ private const val UNDO_LIMIT = 50
 
 private fun formatSeconds(us: Long): String = String.format(Locale.US, "%.1fs", us / 1_000_000.0)
 
+private fun extractThumbnail(
+    path: String,
+    timeUs: Long,
+): Bitmap? =
+    try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(path)
+        val frame = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        retriever.release()
+        frame?.let { scaleThumbnail(it) }
+    } catch (_: Throwable) {
+        null
+    }
+
+private fun scaleThumbnail(bitmap: Bitmap): Bitmap {
+    val height = 64
+    val width = (bitmap.width * height / bitmap.height).coerceAtLeast(1)
+    val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+    if (scaled !== bitmap) bitmap.recycle()
+    return scaled
+}
+
 /** Demo media lookup exposed to :app without leaking the engine-render dependency. */
 fun demoMediaPath(context: Context): String? = KinetixRenderView.findTestMedia(context)
 
@@ -154,6 +180,7 @@ fun KinetixStudioApp(
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var renderStats by remember { mutableStateOf(RenderStats()) }
+    var thumbnails by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var inPointUs by remember { mutableLongStateOf(0L) }
     var outPointUs by remember { mutableLongStateOf(0L) }
@@ -421,6 +448,23 @@ fun KinetixStudioApp(
     LaunchedEffect(activeClip?.clipId) {
         val path = activeClip?.sourcePath
         if (!path.isNullOrBlank()) renderView?.setSourcePath(path)
+    }
+
+    LaunchedEffect(timelineProject, activeMediaPath) {
+        val path = activeMediaPath ?: return@LaunchedEffect
+        val videoClips = timelineProject.tracks.flatMap { it.clips }.filter { it.isVideo }
+        if (videoClips.isEmpty()) {
+            thumbnails = emptyMap()
+            return@LaunchedEffect
+        }
+        thumbnails =
+            withContext(Dispatchers.IO) {
+                videoClips
+                    .mapNotNull { clip ->
+                        extractThumbnail(path, clip.startUs + clip.durationUs / 2)
+                            ?.let { clip.id to it.asImageBitmap() }
+                    }.toMap()
+            }
     }
 
     LaunchedEffect(projectStore) {
@@ -728,6 +772,7 @@ fun KinetixStudioApp(
                     onSplitClip = splitClip,
                     onDeleteClip = deleteClip,
                     onDetachAudio = detachAudio,
+                    thumbnails = thumbnails,
                     modifier =
                         Modifier
                             .fillMaxWidth()
