@@ -5,6 +5,7 @@ import kotlinx.collections.immutable.persistentMapOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class ProjectReducerTest {
     private val settings = CompSettings(width = 1920, height = 1080, fps = 30.0)
@@ -64,6 +65,35 @@ class ProjectReducerTest {
     fun nonClipMutationIsANoOp() {
         val state = stateWithClip(clip())
         val mutation = Mutation(op = MutationOp.GENERIC, targetId = "clip-1")
+        assertSame(state, ProjectReducer.apply(state, mutation))
+    }
+
+    @Test
+    fun addClipInsertsANewClip() {
+        val state = stateWithClip(clip())
+        val added = clip(id = "clip-2", inUs = 2_000_000L, outUs = 3_000_000L)
+        val result = ProjectReducer.apply(state, ProjectMutationCodec.addClip("main", added))
+        assertEquals(added, result.activeComposition().clips.getValue("clip-2"))
+    }
+
+    @Test
+    fun addExistingClipIsANoOp() {
+        val state = stateWithClip(clip())
+        val mutation = ProjectMutationCodec.addClip("main", clip(inUs = 500_000L, outUs = 1_500_000L))
+        assertSame(state, ProjectReducer.apply(state, mutation))
+    }
+
+    @Test
+    fun removeClipDeletesIt() {
+        val state = stateWithClip(clip())
+        val result = ProjectReducer.apply(state, ProjectMutationCodec.removeClip("main", "clip-1"))
+        assertTrue(result.activeComposition().clips.isEmpty())
+    }
+
+    @Test
+    fun removeMissingClipIsANoOp() {
+        val state = stateWithClip(clip())
+        val mutation = ProjectMutationCodec.removeClip("main", "missing")
         assertSame(state, ProjectReducer.apply(state, mutation))
     }
 

@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Operator kernels: Warp, Glitch, Vectorify, Keyer + FX chip rack.
-- Phone-verify each kernel and the clean reset.
+- NLE tools: split at playhead, delete clip, keyboard transport.
+- Phone-verify split/delete persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -26,9 +26,13 @@ Updated: 2026-11-19
 - Phone-verified export: 180 frames, 1920x1080, 3.000s, avc1, 6.0MB, published to `content://media/external_primary/video/media/212868`.
 - Kernels: Warp (7 modes), Glitch (RGB split/block/scanline/VHS/tear), Vectorify (Oklab posterize), Keyer (chroma/luma + despill + checkerboard preview).
 - FX chip rack: Clean / Color / Warp / Glitch / Vectorify / Keyer, chain order preserved; phone-verified each kernel and the clean reset.
+- `ProjectEditor.splitClip` / `removeClip`, `ADD_CLIP` / `REMOVE_CLIP` mutations, reducer cases, `ProjectStore.recordClipSplit` / `recordClipDelete`; JVM tests for ranges, unique ids, add/remove.
+- Split/Delete buttons in the selected-clip row; seeking no longer clears the selection; tapping the selected clip toggles it off.
+- Keyboard transport: C cycles clips, S splits, Del/Backspace deletes, Space toggles play, Home/Left/Right seek by 0.5s.
+- Phone-verified on the scrcpy virtual display: split Title at 2.5s, restart → both halves survived; delete right half, restart → deletion survived.
 
 ## In progress
-- Commit/push/CI for the kernel slice.
+- Commit/push/CI for the split/delete slice.
 - Measure sustained 30/60fps playback and decoder-pool stats on the phone.
 
 ## Next

@@ -1,0 +1,84 @@
+package com.kinetix3d.model
+
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+
+class ProjectEditorTest {
+    private val settings = CompSettings(width = 1920, height = 1080, fps = 30.0)
+
+    private fun state(): ProjectState {
+        val clip =
+            ClipNode(
+                clipId = "clip-1",
+                trackId = "V1",
+                timelineInUs = 0L,
+                timelineOutUs = 2_000_000L,
+                sourceInUs = 500_000L,
+                sourceOutUs = 2_500_000L,
+            )
+        val composition =
+            CompositionGraph(
+                compositionId = "main",
+                name = "Main",
+                settings = settings,
+                clips = persistentMapOf(clip.clipId to clip),
+                tracks = persistentListOf(TrackNode("V1", TrackType.VIDEO)),
+            )
+        return ProjectState(
+            projectId = "demo",
+            settings = settings,
+            compositions = persistentMapOf("main" to composition),
+            activeCompId = "main",
+        )
+    }
+
+    @Test
+    fun splitAtMiddleCreatesTwoContiguousClips() {
+        val result = ProjectEditor.splitClip(state(), "clip-1", 1_000_000L)
+        val clips = result.activeComposition().clips
+        val left = clips.getValue("clip-1")
+        val right = clips.getValue("clip-1-2")
+        assertEquals(0L, left.timelineInUs)
+        assertEquals(1_000_000L, left.timelineOutUs)
+        assertEquals(500_000L, left.sourceInUs)
+        assertEquals(1_500_000L, left.sourceOutUs)
+        assertEquals(1_000_000L, right.timelineInUs)
+        assertEquals(2_000_000L, right.timelineOutUs)
+        assertEquals(1_500_000L, right.sourceInUs)
+        assertEquals(2_500_000L, right.sourceOutUs)
+    }
+
+    @Test
+    fun splitAtEdgeIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.splitClip(state, "clip-1", 0L))
+        assertSame(state, ProjectEditor.splitClip(state, "clip-1", 2_000_000L))
+        assertSame(state, ProjectEditor.splitClip(state, "missing", 1_000_000L))
+    }
+
+    @Test
+    fun repeatedSplitsUseUniqueIds() {
+        val once = ProjectEditor.splitClip(state(), "clip-1", 1_000_000L)
+        val twice = ProjectEditor.splitClip(once, "clip-1-2", 1_500_000L)
+        val ids = twice.activeComposition().clips.keys
+        assertTrue("clip-1" in ids)
+        assertTrue("clip-1-2" in ids)
+        assertTrue("clip-1-2-2" in ids)
+    }
+
+    @Test
+    fun removeClipDeletesIt() {
+        val result = ProjectEditor.removeClip(state(), "clip-1")
+        assertTrue(result.activeComposition().clips.isEmpty())
+    }
+
+    @Test
+    fun removeMissingClipIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.removeClip(state, "missing"))
+    }
+}

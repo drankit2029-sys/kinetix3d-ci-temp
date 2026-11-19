@@ -77,6 +77,28 @@ class ProjectStore(
         return seq
     }
 
+    /** Records both halves of a split (left update + right add) and saves. */
+    suspend fun recordClipSplit(
+        state: ProjectState,
+        left: ClipNode,
+        right: ClipNode,
+    ): Long {
+        val compositionId = state.activeCompId
+        wal.append(ProjectMutationCodec.updateClip(compositionId, left))
+        val seq = wal.append(ProjectMutationCodec.addClip(compositionId, right))
+        save(state)
+        return seq
+    }
+
+    suspend fun recordClipDelete(
+        state: ProjectState,
+        clipId: String,
+    ): Long {
+        val seq = wal.append(ProjectMutationCodec.removeClip(state.activeCompId, clipId))
+        save(state)
+        return seq
+    }
+
     /** Replays journal rows newer than the last applied sequence, then checkpoints. */
     suspend fun recover(base: ProjectState): ProjectState {
         val from = wal.lastAppliedSeq()

@@ -184,6 +184,8 @@ fun TimelinePanel(
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onSplitClip: (String) -> Unit = {},
+    onDeleteClip: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
@@ -257,40 +259,52 @@ fun TimelinePanel(
             }
         }
         if (selectedClip != null) {
-            Row(
+            Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "${selectedClip.label} · ${formatTime(selectedClip.durationUs)}",
                     color = TimelineAccent,
                     fontSize = 11.sp,
-                    modifier = Modifier.weight(1f),
                 )
-                TextButton(
-                    onClick = {
-                        onTrimClip(
-                            selectedClip.id,
-                            selectedClip.startUs + TRIM_STEP_US,
-                            selectedClip.startUs + selectedClip.durationUs,
-                        )
-                    },
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Trim In +0.5s", fontSize = 10.sp)
-                }
-                TextButton(
-                    onClick = {
-                        onTrimClip(
-                            selectedClip.id,
-                            selectedClip.startUs,
-                            selectedClip.startUs + selectedClip.durationUs - TRIM_STEP_US,
-                        )
-                    },
-                ) {
-                    Text("Trim Out −0.5s", fontSize = 10.sp)
+                    TextButton(onClick = { onSplitClip(selectedClip.id) }) {
+                        Text("Split", fontSize = 10.sp)
+                    }
+                    TextButton(onClick = { onDeleteClip(selectedClip.id) }) {
+                        Text("Delete", fontSize = 10.sp)
+                    }
+                    TextButton(
+                        onClick = {
+                            onTrimClip(
+                                selectedClip.id,
+                                selectedClip.startUs + TRIM_STEP_US,
+                                selectedClip.startUs + selectedClip.durationUs,
+                            )
+                        },
+                    ) {
+                        Text("Trim In +0.5s", fontSize = 10.sp)
+                    }
+                    TextButton(
+                        onClick = {
+                            onTrimClip(
+                                selectedClip.id,
+                                selectedClip.startUs,
+                                selectedClip.startUs + selectedClip.durationUs - TRIM_STEP_US,
+                            )
+                        },
+                    ) {
+                        Text("Trim Out −0.5s", fontSize = 10.sp)
+                    }
                 }
             }
         }
@@ -393,6 +407,7 @@ private fun TimelineCanvas(
     val edgeHitPx = with(density) { TRIM_EDGE_HIT_DP.dp.toPx() }
     val totalHeight = rulerPx + trackPx * project.tracks.size
     val currentProject by rememberUpdatedState(project)
+    val currentSelectedClipId by rememberUpdatedState(selectedClipId)
     val currentOnSelectClip by rememberUpdatedState(onSelectClip)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
     val currentOnTrimClip by rememberUpdatedState(onTrimClip)
@@ -419,9 +434,9 @@ private fun TimelineCanvas(
                                 durationUs = durationUs,
                             )
                         if (hit != null) {
-                            currentOnSelectClip(hit.id)
+                            currentOnSelectClip(if (hit.id == currentSelectedClipId) null else hit.id)
                         } else {
-                            currentOnSelectClip(null)
+                            // Seeking must not clear the selection: Split/Delete act on it.
                             currentOnPlayheadChange(xToUs(offset.x, widthPx, durationUs))
                         }
                     }

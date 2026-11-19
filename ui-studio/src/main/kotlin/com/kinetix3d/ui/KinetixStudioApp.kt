@@ -11,6 +11,7 @@ package com.kinetix3d.ui
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,7 +45,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,6 +63,7 @@ import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
+import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
@@ -81,6 +90,7 @@ private val StudioText = Color(0xFFE7ECF3)
 private val StudioWarning = Color(0xFFFFB454)
 
 private const val EXPORT_DEMO_US = 3_000_000L
+private const val KEY_SEEK_STEP_US = 500_000L
 
 /** Demo media lookup exposed to :app without leaking the engine-render dependency. */
 fun demoMediaPath(context: Context): String? = KinetixRenderView.findTestMedia(context)
@@ -142,6 +152,56 @@ fun KinetixStudioApp(
             else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
         }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
+    val focusRequester = remember { FocusRequester() }
+    val splitClip: (String) -> Unit = { id ->
+        val before = demoState
+        val updated = ProjectEditor.splitClip(before, id, playheadUs)
+        if (updated != before) {
+            val newId =
+                updated
+                    .activeComposition()
+                    .clips.keys
+                    .firstOrNull { it !in before.activeComposition().clips }
+            val left = updated.activeComposition().clips[id]
+            val right = newId?.let { updated.activeComposition().clips[it] }
+            demoState = updated
+            selectedClipId = newId ?: id
+            val store = projectStore
+            if (left != null && right != null && store != null) {
+                scope.launch {
+                    runCatching { store.recordClipSplit(updated, left, right) }
+                        .onSuccess { persistenceStatus = "saved" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
+    val deleteClip: (String) -> Unit = { id ->
+        val updated = ProjectEditor.removeClip(demoState, id)
+        if (updated != demoState) {
+            demoState = updated
+            selectedClipId = null
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordClipDelete(updated, id) }
+                        .onSuccess { persistenceStatus = "saved" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
+    val cycleClip: () -> Unit = {
+        val ids = timelineProject.tracks.flatMap { it.clips }.map { it.id }
+        if (ids.isNotEmpty()) {
+            val index = ids.indexOf(selectedClipId)
+            selectedClipId = ids[(index + 1) % ids.size]
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { focusRequester.requestFocus() }
+    }
 
     LaunchedEffect(projectStore) {
         val store = projectStore ?: return@LaunchedEffect
@@ -165,7 +225,53 @@ fun KinetixStudioApp(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .focusRequester(focusRequester)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (event.key) {
+                                Key.C -> {
+                                    cycleClip()
+                                    true
+                                }
+
+                                Key.S -> {
+                                    selectedClipId?.let(splitClip)
+                                    true
+                                }
+
+                                Key.Delete, Key.Backspace -> {
+                                    selectedClipId?.let(deleteClip)
+                                    true
+                                }
+
+                                Key.Spacebar -> {
+                                    isPlaying = !isPlaying
+                                    true
+                                }
+
+                                Key.MoveHome -> {
+                                    playheadUs = 0L
+                                    true
+                                }
+
+                                Key.DirectionLeft -> {
+                                    playheadUs = (playheadUs - KEY_SEEK_STEP_US).coerceAtLeast(0L)
+                                    true
+                                }
+
+                                Key.DirectionRight -> {
+                                    playheadUs =
+                                        (playheadUs + KEY_SEEK_STEP_US)
+                                            .coerceAtMost(timelineProject.durationUs)
+                                    true
+                                }
+
+                                else -> {
+                                    false
+                                }
+                            }
+                        }.verticalScroll(rememberScrollState())
                         .padding(innerPadding)
                         .padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -332,10 +438,12 @@ fun KinetixStudioApp(
                             }
                         }
                     },
+                    onSplitClip = splitClip,
+                    onDeleteClip = deleteClip,
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(260.dp)
+                            .height(300.dp)
                             .clip(RoundedCornerShape(12.dp)),
                 )
                 Text(
