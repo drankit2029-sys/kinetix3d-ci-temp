@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Split All across every track at the playhead.
-- Phone-verify split-all persistence.
+- Decoder interval scheduler + active-clip source selection.
+- Phone-verify the active clip changes at cuts.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -40,13 +40,16 @@ Updated: 2026-11-19
 - Phone-verified video import: picked a Camera MP4, decoder ready, playback advanced to 00:04.299 at ~41 fps, source label showed the imported file.
 - Split All: `ProjectEditor.splitAll` splits every spanning clip across tracks; Shift+S and a Split All button; persisted as a full-state checkpoint.
 - Phone-verified: Split All at 2.000s split V1 and A1 into two segments each; restart kept both splits.
+- `DecoderPoolManager`: half-open interval schedule with 1.5s lookahead, priority ordering and max-decoder cap; JVM tests cover lookahead, priority, cap, active clip and edge cases.
+- UI builds `ScheduledClip`s from video tracks and shows the active clip; `setSourcePath` follows the active clip at cuts.
+- Phone-verified: at 00:00 the source line showed `clip: Winter Olympics`; at 00:03 it showed `clip: Winter Olympics-2` with the matching frame.
 
 ## In progress
-- Commit/push/CI for the Split All slice.
+- Commit/push/CI for the scheduler slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next
-- Multi-clip decoder scheduling (interval index + pre-seek 1.5s ahead).
+- Multi-source compositor (decode two tracks at once) and pre-seek wiring.
 - More operator kernels (Warp, Glitch, Vectorify, Keyer, …).
 - Phone-first interaction audit for every new control.
 

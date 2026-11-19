@@ -65,7 +65,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.kinetix3d.media.DecoderPoolManager
 import com.kinetix3d.media.KinetixAudioNative
+import com.kinetix3d.media.ScheduledClip
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
@@ -206,6 +208,30 @@ fun KinetixStudioApp(
             else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
         }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
+    val scheduledClips =
+        remember(timelineProject, activeMediaPath) {
+            timelineProject.tracks
+                .mapIndexedNotNull { index, track ->
+                    if (track.type != "VIDEO") {
+                        null
+                    } else {
+                        track.clips.map { clip ->
+                            ScheduledClip(
+                                clipId = clip.id,
+                                trackId = track.name,
+                                startUs = clip.startUs,
+                                endUs = clip.startUs + clip.durationUs,
+                                sourcePath = activeMediaPath.orEmpty(),
+                                priority = timelineProject.tracks.size - index,
+                            )
+                        }
+                    }
+                }.flatten()
+        }
+    val activeClip =
+        remember(scheduledClips, playheadUs) {
+            DecoderPoolManager(maxDecoders = 4).activeClip(playheadUs, scheduledClips)
+        }
     val focusRequester = remember { FocusRequester() }
     val undoStack = remember { mutableStateListOf<ProjectState>() }
     val redoStack = remember { mutableStateListOf<ProjectState>() }
@@ -312,6 +338,11 @@ fun KinetixStudioApp(
 
     LaunchedEffect(Unit) {
         runCatching { focusRequester.requestFocus() }
+    }
+
+    LaunchedEffect(activeClip?.clipId) {
+        val path = activeClip?.sourcePath
+        if (!path.isNullOrBlank()) renderView?.setSourcePath(path)
     }
 
     LaunchedEffect(projectStore) {
@@ -443,6 +474,7 @@ fun KinetixStudioApp(
                 Text(
                     text =
                         "source: ${activeMediaPath?.let { File(it).name } ?: "procedural"}" +
+                            " · clip: ${activeClip?.clipId ?: "none"}" +
                             (importStatus?.let { " · $it" } ?: ""),
                     color = StudioMuted,
                     fontSize = 11.sp,
