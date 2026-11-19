@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Decoder interval scheduler + active-clip source selection.
-- Phone-verify the active clip changes at cuts.
+- Ripple trim out: trim a clip and shift later clips on the same track.
+- Phone-verify the shift and persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -43,9 +43,11 @@ Updated: 2026-11-19
 - `DecoderPoolManager`: half-open interval schedule with 1.5s lookahead, priority ordering and max-decoder cap; JVM tests cover lookahead, priority, cap, active clip and edge cases.
 - UI builds `ScheduledClip`s from video tracks and shows the active clip; `setSourcePath` follows the active clip at cuts.
 - Phone-verified: at 00:00 the source line showed `clip: Winter Olympics`; at 00:03 it showed `clip: Winter Olympics-2` with the matching frame.
+- Ripple trim out: `ProjectEditor.rippleTrimOut` trims the out point and shifts later clips on the same track; R key and a Ripple Out button; persisted as a full-state checkpoint.
+- Phone-verified: rippled the V1 clip from 2.0s to 1.5s; Winter Olympics-2 shifted left while A1 stayed at 2.0s; restart kept the ripple.
 
 ## In progress
-- Commit/push/CI for the scheduler slice.
+- Commit/push/CI for the ripple-trim slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

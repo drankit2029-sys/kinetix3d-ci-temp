@@ -60,6 +60,44 @@ object ProjectEditor {
         return ids.fold(state) { current, id -> splitClip(current, id, atUs) }
     }
 
+    /**
+     * Trims the clip's out point and shifts every later clip on the same track
+     * by the same delta, closing or opening the gap.
+     */
+    fun rippleTrimOut(
+        state: ProjectState,
+        clipId: String,
+        newOutUs: Long,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val clip = composition.clips[clipId] ?: return state
+        val clampedOut = newOutUs.coerceAtLeast(clip.timelineInUs + MIN_CLIP_DURATION_US)
+        val delta = clampedOut - clip.timelineOutUs
+        if (delta == 0L) return state
+        val trimmed =
+            clip.copy(
+                timelineOutUs = clampedOut,
+                sourceOutUs = (clip.sourceOutUs + delta).coerceAtLeast(clip.sourceInUs),
+            )
+        var updatedClips = composition.clips.putting(clipId, trimmed)
+        composition.clips.forEach { (id, other) ->
+            if (id != clipId && other.trackId == clip.trackId && other.timelineInUs >= clip.timelineOutUs) {
+                updatedClips =
+                    updatedClips.putting(
+                        id,
+                        other.copy(
+                            timelineInUs = (other.timelineInUs + delta).coerceAtLeast(0L),
+                            timelineOutUs = (other.timelineOutUs + delta).coerceAtLeast(MIN_CLIP_DURATION_US),
+                        ),
+                    )
+            }
+        }
+        val updatedComposition = composition.copy(clips = updatedClips)
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     fun removeClip(
         state: ProjectState,
         clipId: String,

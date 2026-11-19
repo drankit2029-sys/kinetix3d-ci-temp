@@ -281,6 +281,28 @@ fun KinetixStudioApp(
             }
         }
     }
+    val rippleTrim: (String) -> Unit = { id ->
+        val clip = timelineProject.tracks.flatMap { it.clips }.firstOrNull { it.id == id }
+        if (clip != null) {
+            val updated =
+                ProjectEditor.rippleTrimOut(
+                    demoState,
+                    id,
+                    clip.startUs + clip.durationUs - KEY_SEEK_STEP_US,
+                )
+            if (updated != demoState) {
+                applyEdit(updated)
+                val store = projectStore
+                if (store != null) {
+                    scope.launch {
+                        runCatching { store.recordSnapshot(updated) }
+                            .onSuccess { persistenceStatus = "ripple saved" }
+                            .onFailure { persistenceStatus = "save failed" }
+                    }
+                }
+            }
+        }
+    }
     val deleteClip: (String) -> Unit = { id ->
         val updated = ProjectEditor.removeClip(demoState, id)
         if (updated != demoState) {
@@ -383,6 +405,11 @@ fun KinetixStudioApp(
 
                                 Key.S -> {
                                     if (event.isShiftPressed) splitAll() else selectedClipId?.let(splitClip)
+                                    true
+                                }
+
+                                Key.R -> {
+                                    selectedClipId?.let(rippleTrim)
                                     true
                                 }
 
@@ -619,6 +646,7 @@ fun KinetixStudioApp(
                             }
                         }
                     },
+                    onRippleTrimClip = { id, _ -> rippleTrim(id) },
                     onSplitClip = splitClip,
                     onDeleteClip = deleteClip,
                     modifier =

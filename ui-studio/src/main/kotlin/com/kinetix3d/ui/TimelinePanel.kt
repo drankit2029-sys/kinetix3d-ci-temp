@@ -184,6 +184,7 @@ fun TimelinePanel(
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onRippleTrimClip: (String, Long) -> Unit = { _, _ -> },
     onSplitClip: (String) -> Unit = {},
     onDeleteClip: (String) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -304,6 +305,16 @@ fun TimelinePanel(
                         },
                     ) {
                         Text("Trim Out −0.5s", fontSize = 10.sp)
+                    }
+                    TextButton(
+                        onClick = {
+                            onRippleTrimClip(
+                                selectedClip.id,
+                                selectedClip.startUs + selectedClip.durationUs - TRIM_STEP_US,
+                            )
+                        },
+                    ) {
+                        Text("Ripple Out −0.5s", fontSize = 10.sp)
                     }
                 }
             }

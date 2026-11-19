@@ -105,6 +105,89 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun rippleTrimOutShiftsLaterClipsOnTheSameTrack() {
+        val base = state()
+        val composition = base.activeComposition()
+        val later =
+            ClipNode(
+                clipId = "clip-2",
+                trackId = "V1",
+                timelineInUs = 2_000_000L,
+                timelineOutUs = 4_000_000L,
+            )
+        val otherTrack =
+            ClipNode(
+                clipId = "clip-3",
+                trackId = "V2",
+                timelineInUs = 2_000_000L,
+                timelineOutUs = 4_000_000L,
+            )
+        val withClips =
+            base.copy(
+                compositions =
+                    base.compositions.putting(
+                        composition.compositionId,
+                        composition.copy(
+                            clips =
+                                composition.clips
+                                    .putting(later.clipId, later)
+                                    .putting(otherTrack.clipId, otherTrack),
+                        ),
+                    ),
+            )
+        val result = ProjectEditor.rippleTrimOut(withClips, "clip-1", 1_500_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(1_500_000L, clips.getValue("clip-1").timelineOutUs)
+        assertEquals(1_500_000L, clips.getValue("clip-2").timelineInUs)
+        assertEquals(3_500_000L, clips.getValue("clip-2").timelineOutUs)
+        assertEquals(2_000_000L, clips.getValue("clip-3").timelineInUs)
+    }
+
+    @Test
+    fun rippleTrimOutExtendsAndShiftsLaterClips() {
+        val base = state()
+        val composition = base.activeComposition()
+        val later =
+            ClipNode(
+                clipId = "clip-2",
+                trackId = "V1",
+                timelineInUs = 2_000_000L,
+                timelineOutUs = 4_000_000L,
+            )
+        val withClips =
+            base.copy(
+                compositions =
+                    base.compositions.putting(
+                        composition.compositionId,
+                        composition.copy(clips = composition.clips.putting(later.clipId, later)),
+                    ),
+            )
+        val result = ProjectEditor.rippleTrimOut(withClips, "clip-1", 2_500_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(2_500_000L, clips.getValue("clip-2").timelineInUs)
+        assertEquals(4_500_000L, clips.getValue("clip-2").timelineOutUs)
+    }
+
+    @Test
+    fun rippleTrimOutClampsToTheMinimumDuration() {
+        val result = ProjectEditor.rippleTrimOut(state(), "clip-1", 0L)
+        assertEquals(
+            MIN_CLIP_DURATION_US,
+            result
+                .activeComposition()
+                .clips
+                .getValue("clip-1")
+                .timelineOutUs,
+        )
+    }
+
+    @Test
+    fun rippleTrimOutMissingClipIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.rippleTrimOut(state, "missing", 1_000_000L))
+    }
+
+    @Test
     fun removeClipDeletesIt() {
         val result = ProjectEditor.removeClip(state(), "clip-1")
         assertTrue(result.activeComposition().clips.isEmpty())
