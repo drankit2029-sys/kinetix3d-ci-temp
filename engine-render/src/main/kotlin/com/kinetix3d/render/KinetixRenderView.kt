@@ -36,6 +36,7 @@ class KinetixRenderView
         private var lastPostedPlayheadUs = -1L
         private var ticketPosted = false
         private var isPlaying = false
+        private var previewScale = 0.25f
 
         /** Preview telemetry callback, delivered on the UI thread. */
         var onStats: ((RenderStats) -> Unit)? = null
@@ -82,6 +83,13 @@ class KinetixRenderView
             if (ticketPosted) postDemoTicket()
         }
 
+        fun setPreviewScale(scale: Float) {
+            val clamped = scale.coerceIn(0.1f, 1f)
+            if (previewScale == clamped) return
+            previewScale = clamped
+            if (ticketPosted) postDemoTicket()
+        }
+
         override fun surfaceCreated(holder: SurfaceHolder) {
             renderThread.onSurfaceCreated(holder.surface)
             postDemoTicket()
@@ -113,7 +121,7 @@ class KinetixRenderView
                     state = state,
                     overrides = TransientOverrideMap.EMPTY,
                     ptsUs = playheadUs,
-                    previewScale = 0.25f,
+                    previewScale = previewScale,
                     generation = 1L,
                     graph = projectGraph ?: demoClipGraph(),
                     playing = isPlaying,

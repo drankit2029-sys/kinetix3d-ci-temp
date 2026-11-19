@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Export range: Set In / Set Out, timeline markers, ranged export.
-- Phone-verify a 2s ranged export.
+- Project settings: resolution + frame rate dialog, adaptive preview scale.
+- Phone-verify settings persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -49,9 +49,11 @@ Updated: 2026-11-19
 - Phone-verified: detached Winter Olympics → new A2 track with the green audio clip at 0–1.5s; restart kept the A2 track.
 - Export range: `HardwareExportSession.startUs`, Set In / Set Out buttons, I/O shortcuts, timeline range overlay, dynamic "Export N.Ns" label.
 - Phone-verified: set in=1.0s/out=3.0s, exported 120 frames; MediaStore reports 1920×1080, 2000ms, 2.98MB.
+- Project settings dialog: 1080p/4K and 30/60 fps, persisted as a full-state checkpoint; preview scale adapts (4K→0.25, 1080p→0.5); label shows resolution, fps and preview height.
+- Phone-verified: switched to 1920×1080 / 30 fps, label updated to `1920×1080 · 30 fps · 540p PREVIEW`, restart kept the settings.
 
 ## In progress
-- Commit/push/CI for the export-range slice.
+- Commit/push/CI for the project-settings slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

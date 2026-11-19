@@ -26,13 +26,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +64,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -152,6 +157,7 @@ fun KinetixStudioApp(
     var importStatus by remember { mutableStateOf<String?>(null) }
     var inPointUs by remember { mutableLongStateOf(0L) }
     var outPointUs by remember { mutableLongStateOf(0L) }
+    var showSettings by remember { mutableStateOf(false) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exportProgress = remember { MutableStateFlow(0f) }
     val progress by exportProgress.collectAsState()
@@ -221,6 +227,8 @@ fun KinetixStudioApp(
             minOf(demoState.activeComposition().durationUs(), EXPORT_DEMO_US)
         }
     val rangeDurationUs = (rangeEndUs - rangeStartUs).coerceAtLeast(1L)
+    val settings = demoState.settings
+    val previewScale = if (settings.height >= 2160) 0.25f else 0.5f
     val scheduledClips =
         remember(timelineProject, activeMediaPath) {
             timelineProject.tracks
@@ -254,6 +262,24 @@ fun KinetixStudioApp(
             if (undoStack.size > UNDO_LIMIT) undoStack.removeAt(0)
             redoStack.clear()
             demoState = updated
+        }
+    }
+    val applySettings: (Int, Int, Double) -> Unit = { width, height, fps ->
+        val newSettings = demoState.settings.copy(width = width, height = height, fps = fps)
+        val composition = demoState.activeComposition().copy(settings = newSettings)
+        val updated =
+            demoState.copy(
+                settings = newSettings,
+                compositions = demoState.compositions.putting(composition.compositionId, composition),
+            )
+        applyEdit(updated)
+        val store = projectStore
+        if (store != null) {
+            scope.launch {
+                runCatching { store.recordSnapshot(updated) }
+                    .onSuccess { persistenceStatus = "settings saved" }
+                    .onFailure { persistenceStatus = "save failed" }
+            }
         }
     }
     val splitClip: (String) -> Unit = { id ->
@@ -386,7 +412,10 @@ fun KinetixStudioApp(
     }
 
     LaunchedEffect(Unit) {
-        runCatching { focusRequester.requestFocus() }
+        repeat(3) {
+            runCatching { focusRequester.requestFocus() }
+            withFrameNanos { }
+        }
     }
 
     LaunchedEffect(activeClip?.clipId) {
@@ -520,6 +549,7 @@ fun KinetixStudioApp(
                         update = { view ->
                             view.setDeviceProfile(deviceProfile ?: DeviceCapabilityProfile.tier2Default())
                             view.setProjectState(demoState, demoGraph)
+                            view.setPreviewScale(previewScale)
                             view.setPlaying(isPlaying)
                             view.setPlayheadUs(playheadUs)
                             view.setSourcePath(activeMediaPath)
@@ -528,7 +558,9 @@ fun KinetixStudioApp(
                     )
                 }
                 Text(
-                    text = "4K SOURCE — 960p PREVIEW · $effectLabel",
+                    text =
+                        "${settings.width}×${settings.height} · ${settings.fps.toInt()} fps · " +
+                            "${(settings.height * previewScale).toInt()}p PREVIEW · $effectLabel",
                     color = StudioMuted,
                     fontSize = 12.sp,
                 )
@@ -707,6 +739,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = { showSettings = true }) {
+                        Text("Settings")
+                    }
                     TextButton(onClick = { inPointUs = playheadUs }) {
                         Text("Set In")
                     }
@@ -765,6 +800,69 @@ fun KinetixStudioApp(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+        }
+        if (showSettings) {
+            AlertDialog(
+                onDismissRequest = { showSettings = false },
+                title = { Text("Project settings") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Resolution",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        )
+                        listOf(1920 to 1080, 3840 to 2160).forEach { (width, height) ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = settings.width == width && settings.height == height,
+                                            onClick = { applySettings(width, height, settings.fps) },
+                                            role = Role.RadioButton,
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = settings.width == width && settings.height == height,
+                                    onClick = null,
+                                )
+                                Text("$width×$height")
+                            }
+                        }
+                        Text(
+                            "Frame rate",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        )
+                        listOf(30.0, 60.0).forEach { fps ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = settings.fps == fps,
+                                            onClick = { applySettings(settings.width, settings.height, fps) },
+                                            role = Role.RadioButton,
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = settings.fps == fps,
+                                    onClick = null,
+                                )
+                                Text("${fps.toInt()} fps")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSettings = false }) {
+                        Text("Done")
+                    }
+                },
+            )
         }
     }
 }
