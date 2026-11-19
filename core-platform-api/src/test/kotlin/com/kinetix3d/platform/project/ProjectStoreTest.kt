@@ -111,6 +111,20 @@ class ProjectStoreTest {
         }
 
     @Test
+    fun recordSnapshotAppendsAndSaves() =
+        withTempDir { directory ->
+            val wal = InMemoryWalJournal()
+            val store = ProjectStore(directory, wal, "demo")
+            val base = state()
+            store.save(base)
+            val replacement = state(outUs = 1_500_000L)
+            val seq = store.recordSnapshot(replacement)
+            assertEquals(1L, seq)
+            assertEquals(1, wal.readRecordsFrom(0).size)
+            assertEquals(replacement, store.load())
+        }
+
+    @Test
     fun recoverReplaysWalOnTopOfSnapshot() =
         withTempDir { directory ->
             val wal = InMemoryWalJournal()

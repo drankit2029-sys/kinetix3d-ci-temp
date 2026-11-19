@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Preview telemetry: FPS, render time, tile count, format.
-- Phone-verify sustained playback numbers.
+- Undo/redo for timeline edits, persisted through the WAL.
+- Phone-verify undo/redo and restart.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -32,9 +32,11 @@ Updated: 2026-11-19
 - Phone-verified on the scrcpy virtual display: split Title at 2.5s, restart → both halves survived; delete right half, restart → deletion survived.
 - `RenderStats` telemetry: EMA FPS, frame time, tile count and format posted to the UI every 250ms.
 - Phone-verified readout while playing: `preview 48 fps · 6.9 ms · 1 tiles RGBA16F` on the scrcpy virtual display.
+- Undo/redo: 50-entry in-memory stacks, Undo/Redo buttons, Ctrl+Z / Ctrl+Shift+Z, and `ProjectMutationCodec.replaceState` full-state checkpoints persisted through the WAL.
+- Phone-verified: delete → Undo restored the clip → Redo deleted it again → restart kept the redo state.
 
 ## In progress
-- Commit/push/CI for the telemetry slice.
+- Commit/push/CI for the undo/redo slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

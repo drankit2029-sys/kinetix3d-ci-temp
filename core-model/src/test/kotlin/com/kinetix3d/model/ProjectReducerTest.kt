@@ -98,6 +98,14 @@ class ProjectReducerTest {
     }
 
     @Test
+    fun replaceStateRestoresTheWholeProject() {
+        val state = stateWithClip(clip())
+        val replacement = stateWithClip(clip(id = "clip-9", inUs = 5_000_000L, outUs = 6_000_000L))
+        val result = ProjectReducer.apply(state, ProjectMutationCodec.replaceState(replacement))
+        assertEquals(replacement, result)
+    }
+
+    @Test
     fun applyAllFoldsInOrder() {
         val state = stateWithClip(clip())
         val first = ProjectMutationCodec.updateClip("main", clip(inUs = 100_000L, outUs = 1_900_000L))

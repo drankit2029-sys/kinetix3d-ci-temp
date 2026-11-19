@@ -99,6 +99,13 @@ class ProjectStore(
         return seq
     }
 
+    /** Records a full-state checkpoint (undo/redo, bulk edits) and saves it. */
+    suspend fun recordSnapshot(state: ProjectState): Long {
+        val seq = wal.append(ProjectMutationCodec.replaceState(state))
+        save(state)
+        return seq
+    }
+
     /** Replays journal rows newer than the last applied sequence, then checkpoints. */
     suspend fun recover(base: ProjectState): ProjectState {
         val from = wal.lastAppliedSeq()

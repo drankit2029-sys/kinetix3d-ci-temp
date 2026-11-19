@@ -22,6 +22,12 @@ data class ClipRef(
     val clipId: String,
 )
 
+/** Full-state checkpoint used by undo/redo and other non-incremental edits. */
+@Serializable
+data class ProjectSnapshot(
+    val state: ProjectState,
+)
+
 object ProjectMutationCodec {
     fun updateClip(
         compositionId: String,
@@ -66,6 +72,20 @@ object ProjectMutationCodec {
             ProtoBuf.decodeFromByteArray(ClipRef.serializer(), mutation.payload)
         }.getOrNull()
     }
+
+    fun replaceState(state: ProjectState): Mutation =
+        Mutation(
+            op = MutationOp.GENERIC,
+            targetId = state.projectId,
+            payload = ProtoBuf.encodeToByteArray(ProjectSnapshot.serializer(), ProjectSnapshot(state)),
+        )
+
+    fun decodeSnapshot(mutation: Mutation): ProjectSnapshot? {
+        if (mutation.op != MutationOp.GENERIC) return null
+        return runCatching {
+            ProtoBuf.decodeFromByteArray(ProjectSnapshot.serializer(), mutation.payload)
+        }.getOrNull()
+    }
 }
 
 object ProjectReducer {
@@ -77,6 +97,7 @@ object ProjectReducer {
             MutationOp.UPDATE_CLIP -> applyClipUpdate(state, mutation, requireExisting = true)
             MutationOp.ADD_CLIP -> applyClipUpdate(state, mutation, requireExisting = false)
             MutationOp.REMOVE_CLIP -> applyClipRemoval(state, mutation)
+            MutationOp.GENERIC -> ProjectMutationCodec.decodeSnapshot(mutation)?.state ?: state
             else -> state
         }
 

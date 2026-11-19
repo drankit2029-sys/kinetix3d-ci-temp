@@ -33,11 +33,13 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,6 +52,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -64,6 +68,7 @@ import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.model.ProjectEditor
+import com.kinetix3d.model.ProjectState
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
@@ -94,6 +99,7 @@ private val StudioWarning = Color(0xFFFFB454)
 
 private const val EXPORT_DEMO_US = 3_000_000L
 private const val KEY_SEEK_STEP_US = 500_000L
+private const val UNDO_LIMIT = 50
 
 /** Demo media lookup exposed to :app without leaking the engine-render dependency. */
 fun demoMediaPath(context: Context): String? = KinetixRenderView.findTestMedia(context)
@@ -157,6 +163,16 @@ fun KinetixStudioApp(
         }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
     val focusRequester = remember { FocusRequester() }
+    val undoStack = remember { mutableStateListOf<ProjectState>() }
+    val redoStack = remember { mutableStateListOf<ProjectState>() }
+    val applyEdit: (ProjectState) -> Unit = { updated ->
+        if (updated != demoState) {
+            undoStack.add(demoState)
+            if (undoStack.size > UNDO_LIMIT) undoStack.removeAt(0)
+            redoStack.clear()
+            demoState = updated
+        }
+    }
     val splitClip: (String) -> Unit = { id ->
         val before = demoState
         val updated = ProjectEditor.splitClip(before, id, playheadUs)
@@ -168,7 +184,7 @@ fun KinetixStudioApp(
                     .firstOrNull { it !in before.activeComposition().clips }
             val left = updated.activeComposition().clips[id]
             val right = newId?.let { updated.activeComposition().clips[it] }
-            demoState = updated
+            applyEdit(updated)
             selectedClipId = newId ?: id
             val store = projectStore
             if (left != null && right != null && store != null) {
@@ -183,7 +199,7 @@ fun KinetixStudioApp(
     val deleteClip: (String) -> Unit = { id ->
         val updated = ProjectEditor.removeClip(demoState, id)
         if (updated != demoState) {
-            demoState = updated
+            applyEdit(updated)
             selectedClipId = null
             val store = projectStore
             if (store != null) {
@@ -200,6 +216,38 @@ fun KinetixStudioApp(
         if (ids.isNotEmpty()) {
             val index = ids.indexOf(selectedClipId)
             selectedClipId = ids[(index + 1) % ids.size]
+        }
+    }
+    val undo: () -> Unit = {
+        val previous = undoStack.removeLastOrNull()
+        if (previous != null) {
+            redoStack.add(demoState)
+            demoState = previous
+            selectedClipId = null
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(previous) }
+                        .onSuccess { persistenceStatus = "undo saved" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
+    val redo: () -> Unit = {
+        val next = redoStack.removeLastOrNull()
+        if (next != null) {
+            undoStack.add(demoState)
+            demoState = next
+            selectedClipId = null
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(next) }
+                        .onSuccess { persistenceStatus = "redo saved" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
         }
     }
 
@@ -233,6 +281,10 @@ fun KinetixStudioApp(
                         .focusable()
                         .onPreviewKeyEvent { event ->
                             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            if (event.isCtrlPressed && event.key == Key.Z) {
+                                if (event.isShiftPressed) redo() else undo()
+                                return@onPreviewKeyEvent true
+                            }
                             when (event.key) {
                                 Key.C -> {
                                     cycleClip()
@@ -443,7 +495,7 @@ fun KinetixStudioApp(
                     onSelectClip = { selectedClipId = it },
                     onTrimClip = { id, start, end ->
                         val updated = demoState.trimClip(id, start, end)
-                        demoState = updated
+                        applyEdit(updated)
                         val clip = updated.activeComposition().clips[id]
                         val store = projectStore
                         if (clip != null && store != null) {
@@ -462,11 +514,24 @@ fun KinetixStudioApp(
                             .height(300.dp)
                             .clip(RoundedCornerShape(12.dp)),
                 )
-                Text(
-                    text = "project: $persistenceStatus",
-                    color = StudioMuted,
-                    fontSize = 11.sp,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = undo, enabled = undoStack.isNotEmpty()) {
+                        Text("Undo")
+                    }
+                    TextButton(onClick = redo, enabled = redoStack.isNotEmpty()) {
+                        Text("Redo")
+                    }
+                    Text(
+                        text = "project: $persistenceStatus",
+                        color = StudioMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 SectionLabel(
                     text = "DEVICE",
                     modifier = Modifier.padding(top = 8.dp),
