@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Detach Audio: linked audio clip on a new audio track.
-- Phone-verify the new track and persistence.
+- Export range: Set In / Set Out, timeline markers, ranged export.
+- Phone-verify a 2s ranged export.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -47,9 +47,11 @@ Updated: 2026-11-19
 - Phone-verified: rippled the V1 clip from 2.0s to 1.5s; Winter Olympics-2 shifted left while A1 stayed at 2.0s; restart kept the ripple.
 - Detach Audio: `ProjectEditor.detachAudio` creates a linked `AudioClipPayload` clip on a new `A<n>` track, sets `linkGroupId` on both clips, and no-ops for audio/already-linked clips. D key and a Detach Audio button.
 - Phone-verified: detached Winter Olympics → new A2 track with the green audio clip at 0–1.5s; restart kept the A2 track.
+- Export range: `HardwareExportSession.startUs`, Set In / Set Out buttons, I/O shortcuts, timeline range overlay, dynamic "Export N.Ns" label.
+- Phone-verified: set in=1.0s/out=3.0s, exported 120 frames; MediaStore reports 1920×1080, 2000ms, 2.98MB.
 
 ## In progress
-- Commit/push/CI for the Detach Audio slice.
+- Commit/push/CI for the export-range slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

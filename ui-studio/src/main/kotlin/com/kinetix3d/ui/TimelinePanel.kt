@@ -181,6 +181,8 @@ private fun clipLabel(clip: ClipNode): String =
 fun TimelinePanel(
     project: TimelineProjectUi,
     playheadUs: Long,
+    inPointUs: Long = 0L,
+    outPointUs: Long = 0L,
     onPlayheadChange: (Long) -> Unit,
     isPlaying: Boolean,
     onPlayingChange: (Boolean) -> Unit,
@@ -388,6 +390,8 @@ fun TimelinePanel(
                 TimelineCanvas(
                     project = project,
                     playheadUs = playheadUs,
+                    inPointUs = inPointUs,
+                    outPointUs = outPointUs,
                     onPlayheadChange = { pts ->
                         clock.seekTo(pts, System.nanoTime())
                         onPlayheadChange(pts)
@@ -409,6 +413,8 @@ fun TimelinePanel(
 private fun TimelineCanvas(
     project: TimelineProjectUi,
     playheadUs: Long,
+    inPointUs: Long,
+    outPointUs: Long,
     onPlayheadChange: (Long) -> Unit,
     selectedClipId: String?,
     onSelectClip: (String?) -> Unit,
@@ -565,6 +571,17 @@ private fun TimelineCanvas(
                     )
                 drawText(layout, topLeft = Offset(left + 6f, rectTop + 4f))
             }
+        }
+        if (outPointUs > inPointUs) {
+            val inX = (inPointUs.toFloat() / durationUs.toFloat()) * size.width
+            val outX = (outPointUs.toFloat() / durationUs.toFloat()) * size.width
+            drawRect(
+                color = TimelineAccent.copy(alpha = 0.12f),
+                topLeft = Offset(inX, 0f),
+                size = Size((outX - inX).coerceAtLeast(1f), size.height),
+            )
+            drawLine(TimelineAccent, Offset(inX, 0f), Offset(inX, size.height), strokeWidth = 2f)
+            drawLine(TimelineAccent, Offset(outX, 0f), Offset(outX, size.height), strokeWidth = 2f)
         }
         val playheadX = (playheadUs.toFloat() / durationUs.toFloat()) * size.width
         drawLine(TimelineAccent, Offset(playheadX, 0f), Offset(playheadX, size.height), strokeWidth = 2f)

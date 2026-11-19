@@ -38,6 +38,7 @@ class HardwareExportSession(
     private val profile: DeviceCapabilityProfile,
     private val outputFile: File,
     private val durationUs: Long,
+    private val startUs: Long = 0L,
     private val mimeType: String = MediaFormat.MIMETYPE_VIDEO_AVC,
     private val bitRate: Int = DEFAULT_BIT_RATE,
 ) {
@@ -45,7 +46,8 @@ class HardwareExportSession(
         val width = comp.width
         val height = comp.height
         val fps = comp.fps
-        val frameCount = ((durationUs / 1_000_000.0) * fps).toInt().coerceAtLeast(1)
+        val rangeUs = (durationUs - startUs).coerceAtLeast(1L)
+        val frameCount = ((rangeUs / 1_000_000.0) * fps).toInt().coerceAtLeast(1)
         val format =
             MediaFormat.createVideoFormat(mimeType, width, height).apply {
                 setInteger(
@@ -94,7 +96,7 @@ class HardwareExportSession(
             val muxerState = MuxerState()
             val info = MediaCodec.BufferInfo()
             for (frameIndex in 0 until frameCount) {
-                val ptsUs = (frameIndex * 1_000_000.0 / fps).toLong()
+                val ptsUs = startUs + (frameIndex * 1_000_000.0 / fps).toLong()
                 videoSource.update(ptsUs)
                 check(dag.render(plan, graph, width, height, ptsUs, playing = false)) {
                     "DAG render failed at frame $frameIndex"
@@ -106,7 +108,7 @@ class HardwareExportSession(
             }
             encoder.signalEndOfInputStream()
             drainEncoder(encoder, mediaMuxer, info, muxerState, endOfStream = true)
-            return ExportResult(outputFile, frameCount, durationUs, mimeType)
+            return ExportResult(outputFile, frameCount, rangeUs, mimeType)
         } finally {
             runCatching { executor?.close() }
             runCatching { source?.release() }

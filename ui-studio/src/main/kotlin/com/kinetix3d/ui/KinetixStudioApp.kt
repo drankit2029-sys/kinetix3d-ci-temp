@@ -105,6 +105,8 @@ private const val EXPORT_DEMO_US = 3_000_000L
 private const val KEY_SEEK_STEP_US = 500_000L
 private const val UNDO_LIMIT = 50
 
+private fun formatSeconds(us: Long): String = String.format(Locale.US, "%.1fs", us / 1_000_000.0)
+
 /** Demo media lookup exposed to :app without leaking the engine-render dependency. */
 fun demoMediaPath(context: Context): String? = KinetixRenderView.findTestMedia(context)
 
@@ -148,6 +150,8 @@ fun KinetixStudioApp(
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var renderStats by remember { mutableStateOf(RenderStats()) }
     var importStatus by remember { mutableStateOf<String?>(null) }
+    var inPointUs by remember { mutableLongStateOf(0L) }
+    var outPointUs by remember { mutableLongStateOf(0L) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exportProgress = remember { MutableStateFlow(0f) }
     val progress by exportProgress.collectAsState()
@@ -208,6 +212,15 @@ fun KinetixStudioApp(
             else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
         }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
+    val hasRange = outPointUs > inPointUs
+    val rangeStartUs = if (hasRange) inPointUs else 0L
+    val rangeEndUs =
+        if (hasRange) {
+            outPointUs
+        } else {
+            minOf(demoState.activeComposition().durationUs(), EXPORT_DEMO_US)
+        }
+    val rangeDurationUs = (rangeEndUs - rangeStartUs).coerceAtLeast(1L)
     val scheduledClips =
         remember(timelineProject, activeMediaPath) {
             timelineProject.tracks
@@ -432,6 +445,16 @@ fun KinetixStudioApp(
                                     true
                                 }
 
+                                Key.I -> {
+                                    inPointUs = playheadUs
+                                    true
+                                }
+
+                                Key.O -> {
+                                    outPointUs = playheadUs
+                                    true
+                                }
+
                                 Key.Delete, Key.Backspace -> {
                                     selectedClipId?.let(deleteClip)
                                     true
@@ -583,18 +606,14 @@ fun KinetixStudioApp(
                                                     context.cacheDir,
                                                     "kinetix-export-${System.currentTimeMillis()}.mp4",
                                                 )
-                                            val duration =
-                                                minOf(
-                                                    demoState.activeComposition().durationUs(),
-                                                    EXPORT_DEMO_US,
-                                                )
                                             HardwareExportSession(
                                                 sourcePath = path,
                                                 graph = demoGraph,
                                                 comp = demoState.settings.copy(width = 1920, height = 1080),
                                                 profile = deviceProfile ?: DeviceCapabilityProfile.tier2Default(),
                                                 outputFile = output,
-                                                durationUs = duration,
+                                                durationUs = rangeEndUs,
+                                                startUs = rangeStartUs,
                                             ).export { value -> exportProgress.value = value }
                                         }
                                     }
@@ -623,7 +642,13 @@ fun KinetixStudioApp(
                         },
                         modifier = Modifier.height(40.dp),
                     ) {
-                        Text(if (exportStatus == "exporting…") "Exporting…" else "Export 3s")
+                        Text(
+                            if (exportStatus == "exporting…") {
+                                "Exporting…"
+                            } else {
+                                "Export ${String.format(Locale.US, "%.1fs", rangeDurationUs / 1_000_000.0)}"
+                            },
+                        )
                     }
                     Button(
                         onClick = { importLauncher.launch(arrayOf("video/*", "image/*")) },
@@ -647,6 +672,8 @@ fun KinetixStudioApp(
                 TimelinePanel(
                     project = timelineProject,
                     playheadUs = playheadUs,
+                    inPointUs = inPointUs,
+                    outPointUs = outPointUs,
                     onPlayheadChange = { playheadUs = it },
                     isPlaying = isPlaying,
                     onPlayingChange = { isPlaying = it },
@@ -680,6 +707,12 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = { inPointUs = playheadUs }) {
+                        Text("Set In")
+                    }
+                    TextButton(onClick = { outPointUs = playheadUs }) {
+                        Text("Set Out")
+                    }
                     TextButton(onClick = splitAll) {
                         Text("Split All")
                     }
@@ -690,7 +723,13 @@ fun KinetixStudioApp(
                         Text("Redo")
                     }
                     Text(
-                        text = "project: $persistenceStatus",
+                        text =
+                            "project: $persistenceStatus" +
+                                if (hasRange) {
+                                    " · range ${formatSeconds(inPointUs)}–${formatSeconds(outPointUs)}"
+                                } else {
+                                    ""
+                                },
                         color = StudioMuted,
                         fontSize = 11.sp,
                         modifier = Modifier.weight(1f),
