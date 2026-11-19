@@ -303,6 +303,20 @@ fun KinetixStudioApp(
             }
         }
     }
+    val detachAudio: (String) -> Unit = { id ->
+        val updated = ProjectEditor.detachAudio(demoState, id)
+        if (updated != demoState) {
+            applyEdit(updated)
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "audio detached" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
     val deleteClip: (String) -> Unit = { id ->
         val updated = ProjectEditor.removeClip(demoState, id)
         if (updated != demoState) {
@@ -410,6 +424,11 @@ fun KinetixStudioApp(
 
                                 Key.R -> {
                                     selectedClipId?.let(rippleTrim)
+                                    true
+                                }
+
+                                Key.D -> {
+                                    selectedClipId?.let(detachAudio)
                                     true
                                 }
 
@@ -649,6 +668,7 @@ fun KinetixStudioApp(
                     onRippleTrimClip = { id, _ -> rippleTrim(id) },
                     onSplitClip = splitClip,
                     onDeleteClip = deleteClip,
+                    onDetachAudio = detachAudio,
                     modifier =
                         Modifier
                             .fillMaxWidth()

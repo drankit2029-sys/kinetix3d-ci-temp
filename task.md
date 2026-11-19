@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Ripple trim out: trim a clip and shift later clips on the same track.
-- Phone-verify the shift and persistence.
+- Detach Audio: linked audio clip on a new audio track.
+- Phone-verify the new track and persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -45,9 +45,11 @@ Updated: 2026-11-19
 - Phone-verified: at 00:00 the source line showed `clip: Winter Olympics`; at 00:03 it showed `clip: Winter Olympics-2` with the matching frame.
 - Ripple trim out: `ProjectEditor.rippleTrimOut` trims the out point and shifts later clips on the same track; R key and a Ripple Out button; persisted as a full-state checkpoint.
 - Phone-verified: rippled the V1 clip from 2.0s to 1.5s; Winter Olympics-2 shifted left while A1 stayed at 2.0s; restart kept the ripple.
+- Detach Audio: `ProjectEditor.detachAudio` creates a linked `AudioClipPayload` clip on a new `A<n>` track, sets `linkGroupId` on both clips, and no-ops for audio/already-linked clips. D key and a Detach Audio button.
+- Phone-verified: detached Winter Olympics → new A2 track with the green audio clip at 0–1.5s; restart kept the A2 track.
 
 ## In progress
-- Commit/push/CI for the ripple-trim slice.
+- Commit/push/CI for the Detach Audio slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

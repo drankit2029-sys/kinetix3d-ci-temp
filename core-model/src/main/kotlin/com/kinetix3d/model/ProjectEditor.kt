@@ -98,6 +98,43 @@ object ProjectEditor {
         )
     }
 
+    /**
+     * Creates a linked audio clip on the first audio track for a video clip.
+     * The video and audio clips share a [ClipNode.linkGroupId] so later tools
+     * can move/trim them together.
+     */
+    fun detachAudio(
+        state: ProjectState,
+        clipId: String,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val clip = composition.clips[clipId] ?: return state
+        if (clip.payload !is VideoClipPayload) return state
+        if (clip.linkGroupId != null) return state
+        val audioTrackId = nextAudioTrackId(composition)
+        val linkGroup = "link-$clipId"
+        val audioClip =
+            clip.copy(
+                clipId = uniqueClipId(composition, "$clipId-audio"),
+                trackId = audioTrackId,
+                payload = AudioClipPayload,
+                nodeGraph = NodeGraph(),
+                linkGroupId = linkGroup,
+            )
+        val linkedVideo = clip.copy(linkGroupId = linkGroup)
+        val updatedComposition =
+            composition.copy(
+                tracks = composition.tracks.add(TrackNode(audioTrackId, TrackType.AUDIO)),
+                clips =
+                    composition.clips
+                        .putting(clipId, linkedVideo)
+                        .putting(audioClip.clipId, audioClip),
+            )
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     fun removeClip(
         state: ProjectState,
         clipId: String,
@@ -110,10 +147,20 @@ object ProjectEditor {
         )
     }
 
+    private fun nextAudioTrackId(composition: CompositionGraph): String {
+        val highest =
+            composition.tracks
+                .mapNotNull { track -> track.trackId.removePrefix("A").toIntOrNull() }
+                .maxOrNull()
+                ?: 0
+        return "A${highest + 1}"
+    }
+
     private fun uniqueClipId(
         composition: CompositionGraph,
         baseId: String,
     ): String {
+        if (baseId !in composition.clips) return baseId
         var index = 2
         while (true) {
             val candidate = "$baseId-$index"

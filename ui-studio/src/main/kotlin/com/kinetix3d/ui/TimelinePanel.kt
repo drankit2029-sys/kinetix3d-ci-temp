@@ -57,6 +57,7 @@ import com.kinetix3d.model.CompositionGraph
 import com.kinetix3d.model.PolygonClipPayload
 import com.kinetix3d.model.PreCompClipPayload
 import com.kinetix3d.model.TextClipPayload
+import com.kinetix3d.model.VideoClipPayload
 import com.kinetix3d.render.playback.PlaybackClock
 import java.util.Locale
 
@@ -81,6 +82,7 @@ data class TimelineClipUi(
     val startUs: Long,
     val durationUs: Long,
     val color: Color,
+    val isVideo: Boolean = false,
 )
 
 data class TimelineTrackUi(
@@ -118,9 +120,9 @@ fun demoTimelineProject(): TimelineProjectUi {
                     type = "VIDEO",
                     clips =
                         listOf(
-                            TimelineClipUi("v1a", "Winter Olympics", 0L, 8 * second, ClipColors[0]),
-                            TimelineClipUi("v1b", "B-Roll", 8 * second, 6 * second, ClipColors[1]),
-                            TimelineClipUi("v1c", "Interview", 14 * second, 10 * second, ClipColors[0]),
+                            TimelineClipUi("v1a", "Winter Olympics", 0L, 8 * second, ClipColors[0], isVideo = true),
+                            TimelineClipUi("v1b", "B-Roll", 8 * second, 6 * second, ClipColors[1], isVideo = true),
+                            TimelineClipUi("v1c", "Interview", 14 * second, 10 * second, ClipColors[0], isVideo = true),
                         ),
                 ),
                 TimelineTrackUi(
@@ -150,6 +152,7 @@ fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
                             startUs = clip.timelineInUs,
                             durationUs = clip.durationUs,
                             color = ClipColors[index % ClipColors.size],
+                            isVideo = clip.payload is VideoClipPayload,
                         )
                     }
             TimelineTrackUi(
@@ -187,6 +190,7 @@ fun TimelinePanel(
     onRippleTrimClip: (String, Long) -> Unit = { _, _ -> },
     onSplitClip: (String) -> Unit = {},
     onDeleteClip: (String) -> Unit = {},
+    onDetachAudio: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
@@ -283,6 +287,11 @@ fun TimelinePanel(
                     }
                     TextButton(onClick = { onDeleteClip(selectedClip.id) }) {
                         Text("Delete", fontSize = 10.sp)
+                    }
+                    if (selectedClip.isVideo) {
+                        TextButton(onClick = { onDetachAudio(selectedClip.id) }) {
+                            Text("Detach Audio", fontSize = 10.sp)
+                        }
                     }
                     TextButton(
                         onClick = {

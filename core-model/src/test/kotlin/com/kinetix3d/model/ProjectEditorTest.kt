@@ -26,7 +26,11 @@ class ProjectEditorTest {
                 name = "Main",
                 settings = settings,
                 clips = persistentMapOf(clip.clipId to clip),
-                tracks = persistentListOf(TrackNode("V1", TrackType.VIDEO)),
+                tracks =
+                    persistentListOf(
+                        TrackNode("V1", TrackType.VIDEO),
+                        TrackNode("A1", TrackType.AUDIO),
+                    ),
             )
         return ProjectState(
             projectId = "demo",
@@ -185,6 +189,72 @@ class ProjectEditorTest {
     fun rippleTrimOutMissingClipIsANoOp() {
         val state = state()
         assertSame(state, ProjectEditor.rippleTrimOut(state, "missing", 1_000_000L))
+    }
+
+    @Test
+    fun detachAudioCreatesALinkedAudioClip() {
+        val result = ProjectEditor.detachAudio(state(), "clip-1")
+        val clips = result.activeComposition().clips
+        val audio = clips.getValue("clip-1-audio")
+        assertEquals("A2", audio.trackId)
+        assertEquals(AudioClipPayload, audio.payload)
+        assertEquals("link-clip-1", audio.linkGroupId)
+        assertEquals("link-clip-1", clips.getValue("clip-1").linkGroupId)
+        assertEquals(0L, audio.timelineInUs)
+        assertEquals(2_000_000L, audio.timelineOutUs)
+    }
+
+    @Test
+    fun detachAudioTwiceIsANoOp() {
+        val once = ProjectEditor.detachAudio(state(), "clip-1")
+        assertSame(once, ProjectEditor.detachAudio(once, "clip-1"))
+    }
+
+    @Test
+    fun detachAudioIsANoOpForAudioClips() {
+        val base = state()
+        val composition = base.activeComposition()
+        val audio =
+            ClipNode(
+                clipId = "audio-1",
+                trackId = "A1",
+                timelineInUs = 0L,
+                timelineOutUs = 1_000_000L,
+                payload = AudioClipPayload,
+            )
+        val withAudio =
+            base.copy(
+                compositions =
+                    base.compositions.putting(
+                        composition.compositionId,
+                        composition.copy(clips = composition.clips.putting(audio.clipId, audio)),
+                    ),
+            )
+        assertSame(withAudio, ProjectEditor.detachAudio(withAudio, "audio-1"))
+    }
+
+    @Test
+    fun detachAudioCreatesAnAudioTrackWhenMissing() {
+        val base = state()
+        val composition = base.activeComposition()
+        val videoOnly =
+            base.copy(
+                compositions =
+                    base.compositions.putting(
+                        composition.compositionId,
+                        composition.copy(tracks = persistentListOf(TrackNode("V1", TrackType.VIDEO))),
+                    ),
+            )
+        val result = ProjectEditor.detachAudio(videoOnly, "clip-1")
+        assertEquals(
+            "A1",
+            result
+                .activeComposition()
+                .clips
+                .getValue("clip-1-audio")
+                .trackId,
+        )
+        assertTrue(result.activeComposition().tracks.any { it.trackId == "A1" })
     }
 
     @Test
