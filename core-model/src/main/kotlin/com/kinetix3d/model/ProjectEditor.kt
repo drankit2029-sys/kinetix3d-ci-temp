@@ -46,6 +46,20 @@ object ProjectEditor {
         )
     }
 
+    /** Splits every clip that spans [atUs] across all tracks. */
+    fun splitAll(
+        state: ProjectState,
+        atUs: Long,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val ids =
+            composition.clips.values
+                .filter { atUs > it.timelineInUs + MIN_CLIP_DURATION_US }
+                .filter { atUs < it.timelineOutUs - MIN_CLIP_DURATION_US }
+                .map { it.clipId }
+        return ids.fold(state) { current, id -> splitClip(current, id, atUs) }
+    }
+
     fun removeClip(
         state: ProjectState,
         clipId: String,

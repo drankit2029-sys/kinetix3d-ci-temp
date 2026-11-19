@@ -240,6 +240,21 @@ fun KinetixStudioApp(
             }
         }
     }
+    val splitAll: () -> Unit = {
+        val updated = ProjectEditor.splitAll(demoState, playheadUs)
+        if (updated != demoState) {
+            applyEdit(updated)
+            selectedClipId = null
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "split all saved" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
     val deleteClip: (String) -> Unit = { id ->
         val updated = ProjectEditor.removeClip(demoState, id)
         if (updated != demoState) {
@@ -336,7 +351,7 @@ fun KinetixStudioApp(
                                 }
 
                                 Key.S -> {
-                                    selectedClipId?.let(splitClip)
+                                    if (event.isShiftPressed) splitAll() else selectedClipId?.let(splitClip)
                                     true
                                 }
 
@@ -585,6 +600,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = splitAll) {
+                        Text("Split All")
+                    }
                     TextButton(onClick = undo, enabled = undoStack.isNotEmpty()) {
                         Text("Undo")
                     }

@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Media import: SAF picker → app storage → live preview source.
-- Phone-verify image import, orientation and restart persistence.
+- Split All across every track at the playhead.
+- Phone-verify split-all persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -37,9 +37,12 @@ Updated: 2026-11-19
 - Media import: `OpenDocument` picker, copy to app external files, `KinetixRenderView.setSourcePath` recreates the decode source, path persisted in SharedPreferences, Import button + source label.
 - Fixed still-image orientation by flipping the bitmap before `GLUtils.texImage2D`.
 - Phone-verified on display 8: imported a PNG through the picker, preview switched upright, source label showed the imported file, and the path survived a restart.
+- Phone-verified video import: picked a Camera MP4, decoder ready, playback advanced to 00:04.299 at ~41 fps, source label showed the imported file.
+- Split All: `ProjectEditor.splitAll` splits every spanning clip across tracks; Shift+S and a Split All button; persisted as a full-state checkpoint.
+- Phone-verified: Split All at 2.000s split V1 and A1 into two segments each; restart kept both splits.
 
 ## In progress
-- Commit/push/CI for the media-import slice.
+- Commit/push/CI for the Split All slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

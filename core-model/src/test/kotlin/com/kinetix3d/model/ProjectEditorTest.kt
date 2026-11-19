@@ -71,6 +71,40 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun splitAllSplitsEverySpanningClip() {
+        val state = state()
+        val composition = state.activeComposition()
+        val second =
+            ClipNode(
+                clipId = "clip-2",
+                trackId = "V2",
+                timelineInUs = 500_000L,
+                timelineOutUs = 2_500_000L,
+            )
+        val withSecond =
+            state.copy(
+                compositions =
+                    state.compositions.putting(
+                        composition.compositionId,
+                        composition.copy(clips = composition.clips.putting(second.clipId, second)),
+                    ),
+            )
+        val result = ProjectEditor.splitAll(withSecond, 1_000_000L)
+        val clips = result.activeComposition().clips
+        assertTrue("clip-1-2" in clips)
+        assertTrue("clip-2-2" in clips)
+        assertEquals(1_000_000L, clips.getValue("clip-1").timelineOutUs)
+        assertEquals(1_000_000L, clips.getValue("clip-2").timelineOutUs)
+    }
+
+    @Test
+    fun splitAllWithoutSpanningClipsIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.splitAll(state, 0L))
+        assertSame(state, ProjectEditor.splitAll(state, 5_000_000L))
+    }
+
+    @Test
     fun removeClipDeletesIt() {
         val result = ProjectEditor.removeClip(state(), "clip-1")
         assertTrue(result.activeComposition().clips.isEmpty())
