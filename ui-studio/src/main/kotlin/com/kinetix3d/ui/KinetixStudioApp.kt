@@ -283,6 +283,7 @@ fun KinetixStudioApp(
     val focusRequester = remember { FocusRequester() }
     val undoStack = remember { mutableStateListOf<ProjectState>() }
     val redoStack = remember { mutableStateListOf<ProjectState>() }
+    var moveBefore by remember { mutableStateOf<ProjectState?>(null) }
     val applyEdit: (ProjectState) -> Unit = { updated ->
         if (updated != demoState) {
             undoStack.add(demoState)
@@ -363,6 +364,24 @@ fun KinetixStudioApp(
                     scope.launch {
                         runCatching { store.recordSnapshot(updated) }
                             .onSuccess { persistenceStatus = "ripple saved" }
+                            .onFailure { persistenceStatus = "save failed" }
+                    }
+                }
+            }
+        }
+    }
+    val moveSelected: (Long) -> Unit = { deltaUs ->
+        val id = selectedClipId
+        val clip = id?.let { clipId -> timelineProject.tracks.flatMap { it.clips }.firstOrNull { it.id == clipId } }
+        if (id != null && clip != null) {
+            val updated = ProjectEditor.moveClip(demoState, id, (clip.startUs + deltaUs).coerceAtLeast(0L))
+            if (updated != demoState) {
+                applyEdit(updated)
+                val store = projectStore
+                if (store != null) {
+                    scope.launch {
+                        runCatching { store.recordSnapshot(updated) }
+                            .onSuccess { persistenceStatus = "moved" }
                             .onFailure { persistenceStatus = "save failed" }
                     }
                 }
@@ -544,14 +563,22 @@ fun KinetixStudioApp(
                                 }
 
                                 Key.DirectionLeft -> {
-                                    playheadUs = (playheadUs - KEY_SEEK_STEP_US).coerceAtLeast(0L)
+                                    if (event.isShiftPressed) {
+                                        moveSelected(-KEY_SEEK_STEP_US)
+                                    } else {
+                                        playheadUs = (playheadUs - KEY_SEEK_STEP_US).coerceAtLeast(0L)
+                                    }
                                     true
                                 }
 
                                 Key.DirectionRight -> {
-                                    playheadUs =
-                                        (playheadUs + KEY_SEEK_STEP_US)
-                                            .coerceAtMost(timelineProject.durationUs)
+                                    if (event.isShiftPressed) {
+                                        moveSelected(KEY_SEEK_STEP_US)
+                                    } else {
+                                        playheadUs =
+                                            (playheadUs + KEY_SEEK_STEP_US)
+                                                .coerceAtMost(timelineProject.durationUs)
+                                    }
                                     true
                                 }
 
@@ -772,6 +799,29 @@ fun KinetixStudioApp(
                     onSplitClip = splitClip,
                     onDeleteClip = deleteClip,
                     onDetachAudio = detachAudio,
+                    onMoveClipStart = { moveBefore = demoState },
+                    onMoveClip = { id, start ->
+                        demoState = ProjectEditor.moveClip(demoState, id, start)
+                    },
+                    onMoveClipEnd = { id, start ->
+                        val before = moveBefore
+                        val updated = ProjectEditor.moveClip(demoState, id, start)
+                        if (before != null && updated != before) {
+                            undoStack.add(before)
+                            if (undoStack.size > UNDO_LIMIT) undoStack.removeAt(0)
+                            redoStack.clear()
+                            demoState = updated
+                            val store = projectStore
+                            if (store != null) {
+                                scope.launch {
+                                    runCatching { store.recordSnapshot(updated) }
+                                        .onSuccess { persistenceStatus = "moved" }
+                                        .onFailure { persistenceStatus = "save failed" }
+                                }
+                            }
+                        }
+                        moveBefore = null
+                    },
                     thumbnails = thumbnails,
                     modifier =
                         Modifier

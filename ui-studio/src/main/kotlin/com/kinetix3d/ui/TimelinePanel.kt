@@ -196,6 +196,9 @@ fun TimelinePanel(
     onSplitClip: (String) -> Unit = {},
     onDeleteClip: (String) -> Unit = {},
     onDetachAudio: (String) -> Unit = {},
+    onMoveClipStart: (String) -> Unit = {},
+    onMoveClip: (String, Long) -> Unit = { _, _ -> },
+    onMoveClipEnd: (String, Long) -> Unit = { _, _ -> },
     thumbnails: Map<String, ImageBitmap> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
@@ -403,6 +406,9 @@ fun TimelinePanel(
                     selectedClipId = selectedClipId,
                     onSelectClip = onSelectClip,
                     onTrimClip = onTrimClip,
+                    onMoveClipStart = onMoveClipStart,
+                    onMoveClip = onMoveClip,
+                    onMoveClipEnd = onMoveClipEnd,
                     thumbnails = thumbnails,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
@@ -424,6 +430,9 @@ private fun TimelineCanvas(
     selectedClipId: String?,
     onSelectClip: (String?) -> Unit,
     onTrimClip: (String, Long, Long) -> Unit,
+    onMoveClipStart: (String) -> Unit,
+    onMoveClip: (String, Long) -> Unit,
+    onMoveClipEnd: (String, Long) -> Unit,
     thumbnails: Map<String, ImageBitmap>,
     pxPerSecond: Float,
     width: Dp,
@@ -443,10 +452,16 @@ private fun TimelineCanvas(
     val currentOnSelectClip by rememberUpdatedState(onSelectClip)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
     val currentOnTrimClip by rememberUpdatedState(onTrimClip)
+    val currentOnMoveClipStart by rememberUpdatedState(onMoveClipStart)
+    val currentOnMoveClip by rememberUpdatedState(onMoveClip)
+    val currentOnMoveClipEnd by rememberUpdatedState(onMoveClipEnd)
     var trimHit by remember { mutableStateOf<ClipEdgeHit?>(null) }
     var trimStartUs by remember { mutableLongStateOf(0L) }
     var trimEndUs by remember { mutableLongStateOf(0L) }
     var trimDeltaUs by remember { mutableLongStateOf(0L) }
+    var moveClip by remember { mutableStateOf<TimelineClipUi?>(null) }
+    var moveStartUs by remember { mutableLongStateOf(0L) }
+    var moveDeltaUs by remember { mutableLongStateOf(0L) }
 
     Canvas(
         modifier =
@@ -475,7 +490,7 @@ private fun TimelineCanvas(
                 }.pointerInput(durationUs, widthPx, edgeHitPx) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            val hit =
+                            val edgeHit =
                                 hitTestClipEdge(
                                     x = offset.x,
                                     y = offset.y,
@@ -486,21 +501,52 @@ private fun TimelineCanvas(
                                     durationUs = durationUs,
                                     edgeHitPx = edgeHitPx,
                                 )
-                            if (hit != null) {
-                                trimHit = hit
-                                trimStartUs = hit.clip.startUs
-                                trimEndUs = hit.clip.startUs + hit.clip.durationUs
+                            if (edgeHit != null) {
+                                trimHit = edgeHit
+                                trimStartUs = edgeHit.clip.startUs
+                                trimEndUs = edgeHit.clip.startUs + edgeHit.clip.durationUs
                                 trimDeltaUs = 0L
-                                currentOnSelectClip(hit.clip.id)
+                                moveClip = null
+                                currentOnSelectClip(edgeHit.clip.id)
                             } else {
                                 trimHit = null
+                                val bodyHit =
+                                    hitTestClip(
+                                        x = offset.x,
+                                        y = offset.y,
+                                        project = currentProject,
+                                        widthPx = widthPx,
+                                        rulerPx = rulerPx,
+                                        trackPx = trackPx,
+                                        durationUs = durationUs,
+                                    )
+                                if (bodyHit != null) {
+                                    moveClip = bodyHit
+                                    moveStartUs = bodyHit.startUs
+                                    moveDeltaUs = 0L
+                                    currentOnSelectClip(bodyHit.id)
+                                    currentOnMoveClipStart(bodyHit.id)
+                                } else {
+                                    moveClip = null
+                                }
                             }
                         },
-                        onDragEnd = { trimHit = null },
-                        onDragCancel = { trimHit = null },
+                        onDragEnd = {
+                            val moving = moveClip
+                            if (moving != null) {
+                                currentOnMoveClipEnd(moving.id, (moveStartUs + moveDeltaUs).coerceAtLeast(0L))
+                            }
+                            trimHit = null
+                            moveClip = null
+                        },
+                        onDragCancel = {
+                            trimHit = null
+                            moveClip = null
+                        },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val hit = trimHit
+                            val moving = moveClip
                             if (hit != null) {
                                 trimDeltaUs += (dragAmount.x / widthPx * durationUs.toFloat()).toLong()
                                 val (newStart, newEnd) =
@@ -511,6 +557,9 @@ private fun TimelineCanvas(
                                         edge = hit.edge,
                                     )
                                 currentOnTrimClip(hit.clip.id, newStart, newEnd)
+                            } else if (moving != null) {
+                                moveDeltaUs += (dragAmount.x / widthPx * durationUs.toFloat()).toLong()
+                                currentOnMoveClip(moving.id, (moveStartUs + moveDeltaUs).coerceAtLeast(0L))
                             } else {
                                 currentOnPlayheadChange(xToUs(change.position.x, widthPx, durationUs))
                             }

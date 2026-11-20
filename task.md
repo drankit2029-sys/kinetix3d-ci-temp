@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Timeline thumbnails on video clips.
-- Phone-verify thumbnails and label scrim.
+- Clip move by body drag + Shift+arrow fallback.
+- Phone-verify the move and persistence.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -53,9 +53,11 @@ Updated: 2026-11-19
 - Phone-verified: switched to 1920×1080 / 30 fps, label updated to `1920×1080 · 30 fps · 540p PREVIEW`, restart kept the settings.
 - Timeline thumbnails: `MediaMetadataRetriever` frames at each video clip's midpoint, scaled to 64px, drawn at 55% opacity with a dark label scrim.
 - Phone-verified: V1 clips show distinct thumbnails; audio clips stay flat; labels remain readable.
+- Clip move: body drag moves a clip in time (edge drag still trims), Shift+Left/Right moves the selected clip by 0.5s, one undo entry per drag, persisted as a snapshot.
+- Phone-verified: moved Winter Olympics from 0.0s to 0.5s, leaving a gap; restart kept the move.
 
 ## In progress
-- Commit/push/CI for the thumbnail slice.
+- Commit/push/CI for the clip-move slice.
 - Measure sustained 30/60fps playback on the main display when available.
 
 ## Next

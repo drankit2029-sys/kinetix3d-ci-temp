@@ -135,6 +135,28 @@ object ProjectEditor {
         )
     }
 
+    /** Moves a clip to [newStartUs], preserving its duration and source range. */
+    fun moveClip(
+        state: ProjectState,
+        clipId: String,
+        newStartUs: Long,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val clip = composition.clips[clipId] ?: return state
+        val start = newStartUs.coerceAtLeast(0L)
+        if (start == clip.timelineInUs) return state
+        val delta = start - clip.timelineInUs
+        val moved =
+            clip.copy(
+                timelineInUs = start,
+                timelineOutUs = clip.timelineOutUs + delta,
+            )
+        val updatedComposition = composition.copy(clips = composition.clips.putting(clipId, moved))
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     fun removeClip(
         state: ProjectState,
         clipId: String,

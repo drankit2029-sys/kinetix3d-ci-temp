@@ -258,6 +258,30 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun moveClipShiftsTheTimelineRange() {
+        val result = ProjectEditor.moveClip(state(), "clip-1", 3_000_000L)
+        val clip = result.activeComposition().clips.getValue("clip-1")
+        assertEquals(3_000_000L, clip.timelineInUs)
+        assertEquals(5_000_000L, clip.timelineOutUs)
+        assertEquals(500_000L, clip.sourceInUs)
+        assertEquals(2_500_000L, clip.sourceOutUs)
+    }
+
+    @Test
+    fun moveClipClampsAtZero() {
+        val result = ProjectEditor.moveClip(state(), "clip-1", -5_000_000L)
+        val clip = result.activeComposition().clips.getValue("clip-1")
+        assertEquals(0L, clip.timelineInUs)
+        assertEquals(2_000_000L, clip.timelineOutUs)
+    }
+
+    @Test
+    fun moveMissingClipIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.moveClip(state, "missing", 1_000_000L))
+    }
+
+    @Test
     fun removeClipDeletesIt() {
         val result = ProjectEditor.removeClip(state(), "clip-1")
         assertTrue(result.activeComposition().clips.isEmpty())
