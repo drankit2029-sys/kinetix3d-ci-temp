@@ -59,7 +59,7 @@ Updated: 2026-11-19
 - Phone-verified: Composite 50% shows a clear double-exposure of the moving people at 60 fps; the overlay decoder shares the pool.
 
 ## In progress
-- Commit/push/CI for the compositor slice.
+- CI is blocked by GitHub Actions billing: run 44942660550 was not started ("recent account payments have failed or your spending limit needs to be increased"). Local build/tests/lint are green; the code is pushed.
 - Wire the overlay to the active V2 clip (currently the same source at +0.5s for the demo).
 
 ## Next
