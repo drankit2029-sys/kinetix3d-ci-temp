@@ -258,6 +258,37 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun addClipCreatesAVideoClipOnTheTrack() {
+        val result =
+            ProjectEditor.addClip(
+                state = state(),
+                trackId = "V1",
+                startUs = 3_000_000L,
+                durationUs = 2_000_000L,
+                sourceInUs = 500_000L,
+                assetId = "/tmp/overlay.mp4",
+            )
+        val added =
+            result
+                .activeComposition()
+                .clips.values
+                .first { it.clipId != "clip-1" }
+        assertEquals("V1", added.trackId)
+        assertEquals(3_000_000L, added.timelineInUs)
+        assertEquals(5_000_000L, added.timelineOutUs)
+        assertEquals(500_000L, added.sourceInUs)
+        assertEquals(2_500_000L, added.sourceOutUs)
+        assertEquals("/tmp/overlay.mp4", added.assetId)
+    }
+
+    @Test
+    fun addClipRejectsAudioAndMissingTracks() {
+        val state = state()
+        assertSame(state, ProjectEditor.addClip(state, "A1", 0L, 1_000_000L))
+        assertSame(state, ProjectEditor.addClip(state, "missing", 0L, 1_000_000L))
+    }
+
+    @Test
     fun moveClipShiftsTheTimelineRange() {
         val result = ProjectEditor.moveClip(state(), "clip-1", 3_000_000L)
         val clip = result.activeComposition().clips.getValue("clip-1")

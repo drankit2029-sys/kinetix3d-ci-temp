@@ -53,11 +53,12 @@ class DagRenderExecutor(
         windowHeight: Int,
         ptsUs: Long,
         playing: Boolean = false,
+        overlayPtsUs: Long = ptsUs,
     ): Boolean {
         source.setPlaying(playing)
         source.update(ptsUs)
         overlaySource?.setPlaying(playing)
-        overlaySource?.update(ptsUs + OVERLAY_DEMO_OFFSET_US)
+        overlaySource?.update(overlayPtsUs)
         val viewportWidth =
             plan.tiles
                 .maxOf { it.output.right }
@@ -446,6 +447,5 @@ class DagRenderExecutor(
     companion object {
         private const val TAG = "KinetixDagExecutor"
         private const val OVERLAY_INPUT_ID = "overlay-input"
-        private const val OVERLAY_DEMO_OFFSET_US = 500_000L
     }
 }

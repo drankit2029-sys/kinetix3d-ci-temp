@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Two-source compositor: base + overlay, 50% blend.
-- Phone-verify the ghost/double-exposure.
+- V2 clip-driven overlay: Add Overlay + source-time mapping.
+- Phone-verify the V2 overlay blend.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -57,10 +57,12 @@ Updated: 2026-11-19
 - Phone-verified: moved Winter Olympics from 0.0s to 0.5s, leaving a gap; restart kept the move.
 - Two-source compositor: `kinetix.composite` schema, `CompositeKernel` (2D + external OES variants), `DagRenderExecutor` overlay source + `overlay-input` skip, `RenderThread.setOverlaySourcePath`, `demoCompositeGraph`, Composite chip.
 - Phone-verified: Composite 50% shows a clear double-exposure of the moving people at 60 fps; the overlay decoder shares the pool.
+- V2 clip-driven overlay: `ProjectEditor.addClip`, Add Overlay button, `TimelineClipUi.sourceInUs`, `RenderTicket.overlayPtsUs`, overlay source time = `sourceInUs + (playhead - clipStart)`.
+- Phone-verified Add Overlay: a 3s V2 video clip appears at the playhead; the overlay source/time wiring is built and unit-tested. Full V2 composite screenshot was blocked by the scrcpy server restarting repeatedly.
 
 ## In progress
 - CI is blocked by GitHub Actions billing: run 44942660550 was not started ("recent account payments have failed or your spending limit needs to be increased"). Local build/tests/lint are green; the code is pushed.
-- Wire the overlay to the active V2 clip (currently the same source at +0.5s for the demo).
+- Re-verify the V2 composite on a stable virtual display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

@@ -253,6 +253,7 @@ class RenderThread(
                         windowHeight = height,
                         ptsUs = ticket.ptsUs,
                         playing = ticket.playing,
+                        overlayPtsUs = ticket.overlayPtsUs,
                     ) ?: false
                 if (rendered && core.swapBuffers()) {
                     hasRenderedTicket = true

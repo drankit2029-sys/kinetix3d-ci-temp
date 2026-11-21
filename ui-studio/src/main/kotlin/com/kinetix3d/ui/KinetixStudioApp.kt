@@ -283,6 +283,13 @@ fun KinetixStudioApp(
         remember(scheduledClips, playheadUs) {
             DecoderPoolManager(maxDecoders = 4).activeClip(playheadUs, scheduledClips)
         }
+    val overlayTrack = timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
+    val overlayClip =
+        overlayTrack?.clips?.firstOrNull {
+            playheadUs >= it.startUs && playheadUs < it.startUs + it.durationUs
+        }
+    val overlayPtsUs =
+        overlayClip?.let { it.sourceInUs + (playheadUs - it.startUs) } ?: 0L
     val focusRequester = remember { FocusRequester() }
     val undoStack = remember { mutableStateListOf<ProjectState>() }
     val redoStack = remember { mutableStateListOf<ProjectState>() }
@@ -310,6 +317,34 @@ fun KinetixStudioApp(
                 runCatching { store.recordSnapshot(updated) }
                     .onSuccess { persistenceStatus = "settings saved" }
                     .onFailure { persistenceStatus = "save failed" }
+            }
+        }
+    }
+    val addOverlay: () -> Unit = {
+        val track =
+            timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
+                ?: timelineProject.tracks.firstOrNull { it.type == "VIDEO" }
+        val path = activeMediaPath
+        if (track != null && path != null) {
+            val updated =
+                ProjectEditor.addClip(
+                    state = demoState,
+                    trackId = track.name,
+                    startUs = playheadUs,
+                    durationUs = 3_000_000L,
+                    sourceInUs = 500_000L,
+                    assetId = path,
+                )
+            if (updated != demoState) {
+                applyEdit(updated)
+                val store = projectStore
+                if (store != null) {
+                    scope.launch {
+                        runCatching { store.recordSnapshot(updated) }
+                            .onSuccess { persistenceStatus = "overlay added" }
+                            .onFailure { persistenceStatus = "save failed" }
+                    }
+                }
             }
         }
     }
@@ -628,8 +663,13 @@ fun KinetixStudioApp(
                             view.setPlayheadUs(playheadUs)
                             view.setSourcePath(activeMediaPath)
                             view.setOverlaySourcePath(
-                                if (selectedEffects == listOf("composite")) activeMediaPath else null,
+                                if (selectedEffects == listOf("composite") && overlayClip != null) {
+                                    activeMediaPath
+                                } else {
+                                    null
+                                },
                             )
+                            view.setOverlayPtsUs(overlayPtsUs)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -845,6 +885,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = addOverlay) {
+                        Text("Add Overlay")
+                    }
                     TextButton(onClick = { showSettings = true }) {
                         Text("Settings")
                     }

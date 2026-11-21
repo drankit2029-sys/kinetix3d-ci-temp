@@ -135,6 +135,38 @@ object ProjectEditor {
         )
     }
 
+    /** Adds a video clip to [trackId] at [startUs] with an optional source offset. */
+    fun addClip(
+        state: ProjectState,
+        trackId: String,
+        startUs: Long,
+        durationUs: Long,
+        sourceInUs: Long = 0L,
+        assetId: String? = null,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val track = composition.tracks.firstOrNull { it.trackId == trackId } ?: return state
+        if (track.type != TrackType.VIDEO) return state
+        val start = startUs.coerceAtLeast(0L)
+        val duration = durationUs.coerceAtLeast(MIN_CLIP_DURATION_US)
+        val sourceIn = sourceInUs.coerceAtLeast(0L)
+        val clip =
+            ClipNode(
+                clipId = uniqueClipId(composition, "clip-${composition.clips.size + 1}"),
+                trackId = trackId,
+                timelineInUs = start,
+                timelineOutUs = start + duration,
+                sourceInUs = sourceIn,
+                sourceOutUs = sourceIn + duration,
+                assetId = assetId,
+                payload = VideoClipPayload,
+            )
+        val updatedComposition = composition.copy(clips = composition.clips.putting(clip.clipId, clip))
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     /** Moves a clip to [newStartUs], preserving its duration and source range. */
     fun moveClip(
         state: ProjectState,

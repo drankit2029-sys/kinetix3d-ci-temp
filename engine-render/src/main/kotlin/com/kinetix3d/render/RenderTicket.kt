@@ -17,4 +17,5 @@ data class RenderTicket(
     val generation: Long,
     val graph: NodeGraph = NodeGraph.passthrough(),
     val playing: Boolean = false,
+    val overlayPtsUs: Long = 0L,
 )

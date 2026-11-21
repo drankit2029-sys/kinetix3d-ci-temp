@@ -37,6 +37,7 @@ class KinetixRenderView
         private var ticketPosted = false
         private var isPlaying = false
         private var previewScale = 0.25f
+        private var overlayPtsUs = 0L
 
         /** Preview telemetry callback, delivered on the UI thread. */
         var onStats: ((RenderStats) -> Unit)? = null
@@ -54,6 +55,10 @@ class KinetixRenderView
 
         fun setOverlaySourcePath(path: String?) {
             renderThread.setOverlaySourcePath(path)
+        }
+
+        fun setOverlayPtsUs(ptsUs: Long) {
+            overlayPtsUs = ptsUs
         }
 
         fun setDeviceProfile(profile: DeviceCapabilityProfile) {
@@ -129,6 +134,7 @@ class KinetixRenderView
                     generation = 1L,
                     graph = projectGraph ?: demoClipGraph(),
                     playing = isPlaying,
+                    overlayPtsUs = overlayPtsUs,
                 ),
             )
         }
