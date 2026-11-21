@@ -87,6 +87,7 @@ import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.RenderStats
 import com.kinetix3d.render.demoClipGraph
+import com.kinetix3d.render.demoCompositeGraph
 import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.render.demoKernelGraph
 import com.kinetix3d.render.export.HardwareExportSession
@@ -235,6 +236,7 @@ fun KinetixStudioApp(
             when {
                 selectedEffects.isEmpty() -> demoClipGraph()
                 selectedEffects == listOf("color") -> demoEffectsGraph()
+                selectedEffects == listOf("composite") -> demoCompositeGraph()
                 else -> demoKernelGraph(selectedEffects)
             }
         }
@@ -242,6 +244,7 @@ fun KinetixStudioApp(
         when {
             selectedEffects.isEmpty() -> "Clean"
             selectedEffects == listOf("color") -> "ColorSuite → Blur → Glow"
+            selectedEffects == listOf("composite") -> "Composite 50%"
             else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
         }
     val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
@@ -624,6 +627,9 @@ fun KinetixStudioApp(
                             view.setPlaying(isPlaying)
                             view.setPlayheadUs(playheadUs)
                             view.setSourcePath(activeMediaPath)
+                            view.setOverlaySourcePath(
+                                if (selectedEffects == listOf("composite")) activeMediaPath else null,
+                            )
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -667,6 +673,11 @@ fun KinetixStudioApp(
                         selected = selectedEffects == listOf("color"),
                         onClick = { selectedEffects = listOf("color") },
                         label = { Text("Color") },
+                    )
+                    FilterChip(
+                        selected = selectedEffects == listOf("composite"),
+                        onClick = { selectedEffects = listOf("composite") },
+                        label = { Text("Composite") },
                     )
                     listOf("warp", "glitch", "vectorify", "keyer").forEach { effect ->
                         FilterChip(

@@ -17,6 +17,7 @@ import com.kinetix3d.render.plan.TilePlan
 class DagRenderExecutor(
     private val pool: ReferenceCountedFboPool,
     private val source: SourceTexture = ProceduralSource(),
+    private val overlaySource: SourceTexture? = null,
 ) : AutoCloseable {
     private val passThrough = PassThroughKernel()
     private val externalPassThrough = ExternalPassThroughKernel()
@@ -28,9 +29,11 @@ class DagRenderExecutor(
     private val glitch = GlitchKernel()
     private val vectorify = VectorifyKernel()
     private val keyer = KeyerKernel()
+    private val composite = CompositeKernel()
 
     fun initialize(): Boolean =
         source.initialize() &&
+            (overlaySource?.initialize() ?: true) &&
             passThrough.initialize() &&
             externalPassThrough.initialize() &&
             colorSuite.initialize() &&
@@ -40,7 +43,8 @@ class DagRenderExecutor(
             warp.initialize() &&
             glitch.initialize() &&
             vectorify.initialize() &&
-            keyer.initialize()
+            keyer.initialize() &&
+            composite.initialize()
 
     fun render(
         plan: RenderPlan,
@@ -52,6 +56,8 @@ class DagRenderExecutor(
     ): Boolean {
         source.setPlaying(playing)
         source.update(ptsUs)
+        overlaySource?.setPlaying(playing)
+        overlaySource?.update(ptsUs + OVERLAY_DEMO_OFFSET_US)
         val viewportWidth =
             plan.tiles
                 .maxOf { it.output.right }
@@ -83,36 +89,41 @@ class DagRenderExecutor(
             for (pass in plan.passes) {
                 when (pass.schemaId) {
                     NodeSchemaIds.GROUP_INPUT -> {
-                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
-                        if (source.isExternal) {
-                            externalPassThrough.render(
-                                inputTexture = source.textureId,
-                                outputFramebuffer = out.framebufferId,
-                                width = roiWidth,
-                                height = roiHeight,
-                                tileOffsetX = offsetX,
-                                tileOffsetY = offsetY,
-                                tileScaleX = scaleX,
-                                tileScaleY = scaleY,
-                                textureMatrix = source.textureMatrix(),
-                            )
+                        if (pass.nodeId == OVERLAY_INPUT_ID) {
+                            // The composite node samples the overlay source directly.
+                            Unit
                         } else {
-                            passThrough.render(
-                                inputTexture = source.textureId,
-                                outputFramebuffer = out.framebufferId,
-                                width = roiWidth,
-                                height = roiHeight,
-                                tileOffsetX = offsetX,
-                                tileOffsetY = offsetY,
-                                tileScaleX = scaleX,
-                                tileScaleY = scaleY,
-                            )
+                            val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                            if (source.isExternal) {
+                                externalPassThrough.render(
+                                    inputTexture = source.textureId,
+                                    outputFramebuffer = out.framebufferId,
+                                    width = roiWidth,
+                                    height = roiHeight,
+                                    tileOffsetX = offsetX,
+                                    tileOffsetY = offsetY,
+                                    tileScaleX = scaleX,
+                                    tileScaleY = scaleY,
+                                    textureMatrix = source.textureMatrix(),
+                                )
+                            } else {
+                                passThrough.render(
+                                    inputTexture = source.textureId,
+                                    outputFramebuffer = out.framebufferId,
+                                    width = roiWidth,
+                                    height = roiHeight,
+                                    tileOffsetX = offsetX,
+                                    tileOffsetY = offsetY,
+                                    tileScaleX = scaleX,
+                                    tileScaleY = scaleY,
+                                )
+                            }
+                            currentHandle?.let { pool.release(it) }
+                            currentHandle = out
+                            currentFramebuffer = out.framebufferId
+                            currentTexture = out.textureId
+                            checkGl("group-input")
                         }
-                        currentHandle?.let { pool.release(it) }
-                        currentHandle = out
-                        currentFramebuffer = out.framebufferId
-                        currentTexture = out.textureId
-                        checkGl("group-input")
                     }
 
                     NodeSchemaIds.GROUP_OUTPUT -> {
@@ -313,6 +324,39 @@ class DagRenderExecutor(
                         checkGl("keyer")
                     }
 
+                    "kinetix.composite" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        val overlay = overlaySource
+                        if (overlay == null) {
+                            passThrough.render(
+                                inputTexture = currentTexture,
+                                outputFramebuffer = out.framebufferId,
+                                width = roiWidth,
+                                height = roiHeight,
+                                tileOffsetX = 0f,
+                                tileOffsetY = 0f,
+                                tileScaleX = 1f,
+                                tileScaleY = 1f,
+                            )
+                        } else {
+                            composite.render(
+                                baseTexture = currentTexture,
+                                overlayTexture = overlay.textureId,
+                                outputFramebuffer = out.framebufferId,
+                                width = roiWidth,
+                                height = roiHeight,
+                                opacity = param(graph, pass.nodeId, "opacity", 1f),
+                                overlayExternal = overlay.isExternal,
+                                overlayMatrix = overlay.textureMatrix(),
+                            )
+                        }
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("composite")
+                    }
+
                     else -> {
                         Unit
                     }
@@ -394,10 +438,14 @@ class DagRenderExecutor(
         glitch.release()
         vectorify.release()
         keyer.release()
+        composite.release()
+        overlaySource?.release()
         source.release()
     }
 
     companion object {
         private const val TAG = "KinetixDagExecutor"
+        private const val OVERLAY_INPUT_ID = "overlay-input"
+        private const val OVERLAY_DEMO_OFFSET_US = 500_000L
     }
 }

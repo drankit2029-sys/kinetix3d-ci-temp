@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Clip move by body drag + Shift+arrow fallback.
-- Phone-verify the move and persistence.
+- Two-source compositor: base + overlay, 50% blend.
+- Phone-verify the ghost/double-exposure.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -55,13 +55,17 @@ Updated: 2026-11-19
 - Phone-verified: V1 clips show distinct thumbnails; audio clips stay flat; labels remain readable.
 - Clip move: body drag moves a clip in time (edge drag still trims), Shift+Left/Right moves the selected clip by 0.5s, one undo entry per drag, persisted as a snapshot.
 - Phone-verified: moved Winter Olympics from 0.0s to 0.5s, leaving a gap; restart kept the move.
+- Two-source compositor: `kinetix.composite` schema, `CompositeKernel` (2D + external OES variants), `DagRenderExecutor` overlay source + `overlay-input` skip, `RenderThread.setOverlaySourcePath`, `demoCompositeGraph`, Composite chip.
+- Phone-verified: Composite 50% shows a clear double-exposure of the moving people at 60 fps; the overlay decoder shares the pool.
 
 ## In progress
-- Commit/push/CI for the clip-move slice.
-- Measure sustained 30/60fps playback on the main display when available.
+- Commit/push/CI for the compositor slice.
+- Wire the overlay to the active V2 clip (currently the same source at +0.5s for the demo).
 
 ## Next
-- Multi-source compositor (decode two tracks at once) and pre-seek wiring.
+- V2 clip-driven overlay source and per-track compositing.
+- Export foreground service for long exports.
+- Rust audio engine wiring.
 - More operator kernels (Warp, Glitch, Vectorify, Keyer, …).
 - Phone-first interaction audit for every new control.
 

@@ -52,6 +52,10 @@ class KinetixRenderView
             renderThread.setSourcePath(path)
         }
 
+        fun setOverlaySourcePath(path: String?) {
+            renderThread.setOverlaySourcePath(path)
+        }
+
         fun setDeviceProfile(profile: DeviceCapabilityProfile) {
             if (this.profile == profile) return
             this.profile = profile

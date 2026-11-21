@@ -832,6 +832,23 @@ object KinetixOperatorCatalog {
             searchSynonyms = listOf("follow path", "motion path", "orient", "spline"),
         )
 
+    val composite =
+        KinetixOperatorSchema(
+            id = "kinetix.composite",
+            displayName = "Composite",
+            category = OperatorCategory.UTILITY,
+            sockets =
+                listOf(
+                    SocketSpec("base", SocketDirection.INPUT, SocketDataType.IMAGE),
+                    SocketSpec("overlay", SocketDirection.INPUT, SocketDataType.IMAGE),
+                    imageOut,
+                ),
+            modes = listOf(ModeSpec("over", "Over", visibleParams = listOf("opacity"))),
+            params = listOf(ParamSpec.FloatParam("opacity", "Opacity", default = 1f)),
+            tiling = TilingCapability.PointExact,
+            searchSynonyms = listOf("over", "blend", "layer", "composite"),
+        )
+
     /** The 14 v1.0 polymorphic operators, in product-spec order. */
     val coreV100: List<KinetixOperatorSchema> =
         listOf(
@@ -853,7 +870,7 @@ object KinetixOperatorCatalog {
 
     /** Every schema known to the app, including group/polygon/path helpers. */
     val all: List<KinetixOperatorSchema> =
-        listOf(groupInput, groupOutput) + coreV100 +
+        listOf(groupInput, groupOutput, composite) + coreV100 +
             listOf(polygon, followPath)
 
     private val index: Map<String, KinetixOperatorSchema> = all.associateBy { it.id }

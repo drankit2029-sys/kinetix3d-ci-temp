@@ -35,6 +35,9 @@ class RenderThread(
     @Volatile
     private var sourcePath: String? = null
 
+    @Volatile
+    private var overlaySourcePath: String? = null
+
     private var lastTicket: RenderTicket? = null
 
     private var eglCore: EglCore? = null
@@ -69,6 +72,21 @@ class RenderThread(
         handler.post {
             if (sourcePath == path) return@post
             sourcePath = path
+            runCatching { eglCore?.makeCurrent() }
+            executor?.close()
+            executor = null
+            decoderPool?.close()
+            decoderPool = null
+            createSource()
+            lastTicket?.let { pendingTicket.set(it) }
+            renderFrame()
+        }
+    }
+
+    fun setOverlaySourcePath(path: String?) {
+        handler.post {
+            if (overlaySourcePath == path) return@post
+            overlaySourcePath = path
             runCatching { eglCore?.makeCurrent() }
             executor?.close()
             executor = null
@@ -184,7 +202,22 @@ class RenderThread(
                     MediaSource(path)
                 }
             }
-        val dag = DagRenderExecutor(fboPool, source)
+        val overlayPath = overlaySourcePath
+        val overlay =
+            when {
+                overlayPath == null -> {
+                    null
+                }
+
+                overlayPath.endsWith(".mp4", true) || overlayPath.endsWith(".mov", true) -> {
+                    MediaCodecSource(overlayPath, decoderLeases) { requestFrame() }
+                }
+
+                else -> {
+                    MediaSource(overlayPath)
+                }
+            }
+        val dag = DagRenderExecutor(fboPool, source, overlay)
         if (runCatching { dag.initialize() }.getOrDefault(false)) {
             executor = dag
         } else {

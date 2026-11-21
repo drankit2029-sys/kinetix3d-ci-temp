@@ -77,6 +77,39 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
     )
 }
 
+/** Base + overlay composite; the overlay source is supplied by RenderThread. */
+fun demoCompositeGraph(): NodeGraph {
+    val base = NodeGraph.passthrough()
+    val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
+    val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
+    val overlayInput =
+        GraphNode(
+            nodeId = "overlay-input",
+            schemaId = NodeSchemaIds.GROUP_INPUT,
+        )
+    val composite =
+        GraphNode(
+            nodeId = "composite",
+            schemaId = "kinetix.composite",
+            inputs =
+                persistentMapOf(
+                    "base" to NodeInput.FromNode(input.nodeId),
+                    "overlay" to NodeInput.FromNode(overlayInput.nodeId),
+                ),
+            params = persistentMapOf("opacity" to ParamChannel.constant(0.5f)),
+        )
+    return base.copy(
+        nodes =
+            base.nodes
+                .putting(overlayInput.nodeId, overlayInput)
+                .putting(composite.nodeId, composite)
+                .putting(
+                    output.nodeId,
+                    output.copy(inputs = persistentMapOf("clipSource" to NodeInput.FromNode(composite.nodeId))),
+                ),
+    )
+}
+
 fun demoEffectsGraph(): NodeGraph {
     val base = NodeGraph.passthrough()
     val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)

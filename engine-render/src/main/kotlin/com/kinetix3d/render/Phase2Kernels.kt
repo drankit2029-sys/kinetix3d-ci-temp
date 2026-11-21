@@ -802,3 +802,128 @@ class KeyerKernel {
         """
     }
 }
+
+class CompositeKernel {
+    private val quad2d = FullscreenQuad()
+    private val quadExternal = FullscreenQuad()
+    private var base2d = -1
+    private var overlay2d = -1
+    private var opacity2d = -1
+    private var matrix2d = -1
+    private var baseExt = -1
+    private var overlayExt = -1
+    private var opacityExt = -1
+    private var matrixExt = -1
+
+    fun initialize(): Boolean {
+        if (!quad2d.create(FRAGMENT_SHADER_2D)) return false
+        if (!quadExternal.create(FRAGMENT_SHADER_EXTERNAL)) return false
+        base2d = GLES20.glGetUniformLocation(quad2d.programId, "uBase")
+        overlay2d = GLES20.glGetUniformLocation(quad2d.programId, "uOverlay")
+        opacity2d = GLES20.glGetUniformLocation(quad2d.programId, "uOpacity")
+        matrix2d = GLES20.glGetUniformLocation(quad2d.programId, "uOverlayMatrix")
+        baseExt = GLES20.glGetUniformLocation(quadExternal.programId, "uBase")
+        overlayExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOverlay")
+        opacityExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOpacity")
+        matrixExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOverlayMatrix")
+        return base2d >= 0 && overlay2d >= 0 && baseExt >= 0 && overlayExt >= 0
+    }
+
+    fun render(
+        baseTexture: Int,
+        overlayTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        opacity: Float,
+        overlayExternal: Boolean,
+        overlayMatrix: FloatArray?,
+    ) {
+        val quad = if (overlayExternal) quadExternal else quad2d
+        val baseLoc = if (overlayExternal) baseExt else base2d
+        val overlayLoc = if (overlayExternal) overlayExt else overlay2d
+        val opacityLoc = if (overlayExternal) opacityExt else opacity2d
+        val matrixLoc = if (overlayExternal) matrixExt else matrix2d
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, baseTexture)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(
+            if (overlayExternal) GLES11Ext.GL_TEXTURE_EXTERNAL_OES else GLES20.GL_TEXTURE_2D,
+            overlayTexture,
+        )
+        quad.use(0f, 0f, 1f, 1f)
+        GLES20.glUniform1i(baseLoc, 0)
+        GLES20.glUniform1i(overlayLoc, 1)
+        GLES20.glUniform1f(opacityLoc, opacity)
+        GLES20.glUniformMatrix4fv(matrixLoc, 1, false, overlayMatrix ?: IDENTITY, 0)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(
+            if (overlayExternal) GLES11Ext.GL_TEXTURE_EXTERNAL_OES else GLES20.GL_TEXTURE_2D,
+            0,
+        )
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+    }
+
+    fun release() {
+        quad2d.release()
+        quadExternal.release()
+    }
+
+    companion object {
+        private val IDENTITY =
+            floatArrayOf(
+                1f,
+                0f,
+                0f,
+                0f,
+                0f,
+                1f,
+                0f,
+                0f,
+                0f,
+                0f,
+                1f,
+                0f,
+                0f,
+                0f,
+                0f,
+                1f,
+            )
+
+        private const val FRAGMENT_SHADER_2D = """
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uBase;
+            uniform sampler2D uOverlay;
+            uniform float uOpacity;
+            uniform mat4 uOverlayMatrix;
+            void main() {
+                vec4 base = texture2D(uBase, vUv);
+                vec2 uv = (uOverlayMatrix * vec4(vUv, 0.0, 1.0)).xy;
+                vec4 overlay = texture2D(uOverlay, uv);
+                gl_FragColor = vec4(mix(base.rgb, overlay.rgb, overlay.a * uOpacity), 1.0);
+            }
+        """
+
+        private const val FRAGMENT_SHADER_EXTERNAL = """
+            #extension GL_OES_EGL_image_external : require
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uBase;
+            uniform samplerExternalOES uOverlay;
+            uniform float uOpacity;
+            uniform mat4 uOverlayMatrix;
+            void main() {
+                vec4 base = texture2D(uBase, vUv);
+                vec2 uv = (uOverlayMatrix * vec4(vUv, 0.0, 1.0)).xy;
+                vec4 overlay = texture2D(uOverlay, uv);
+                gl_FragColor = vec4(mix(base.rgb, overlay.rgb, overlay.a * uOpacity), 1.0);
+            }
+        """
+    }
+}
