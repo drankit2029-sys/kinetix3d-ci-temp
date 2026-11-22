@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Transport header layout fix (project name no longer squeezed).
-- Verify the two-row header on the phone.
+- Adaptive timeline height for short/landscape screens.
+- Verify the compact layout.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -99,6 +99,7 @@ Updated: 2026-11-19
 - Keys dialog documents the keyboard transport/editing shortcuts (Space, arrows, C/S/Shift+S, Del, R, D, comma/period, semicolon/apostrophe, I/O, Ctrl+Z).
 - Transport header split into two rows: project name + time, then a horizontally scrollable Play/Mute/−/+/Fit row. Fixes the project name being squeezed to one character per line on 411dp phones.
 - Phone-verified: the two-row header renders correctly; the Keys and Media dialogs open and are readable.
+- Adaptive timeline height: 220dp on screens shorter than 600dp (landscape/small phones), 300dp otherwise.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.

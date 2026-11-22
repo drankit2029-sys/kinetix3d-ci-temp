@@ -71,6 +71,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -227,6 +228,8 @@ fun KinetixStudioApp(
             ExportState.Cancelled -> "export cancelled"
         }
     val context = LocalContext.current
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val timelineHeight = if (screenHeightDp < 600) 220.dp else 300.dp
     val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }
     var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
     val scope = rememberCoroutineScope()
@@ -1094,7 +1097,7 @@ fun KinetixStudioApp(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(300.dp)
+                            .height(timelineHeight)
                             .clip(RoundedCornerShape(12.dp)),
                 )
                 Row(
