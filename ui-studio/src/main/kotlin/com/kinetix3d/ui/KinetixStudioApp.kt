@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -75,6 +76,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -210,6 +212,10 @@ fun KinetixStudioApp(
     var exportWidth by remember { mutableIntStateOf(1920) }
     var exportHeight by remember { mutableIntStateOf(1080) }
     var muted by remember { mutableStateOf(false) }
+    var showEq by remember { mutableStateOf(false) }
+    var eqLowDb by remember { mutableStateOf(0f) }
+    var eqMidDb by remember { mutableStateOf(0f) }
+    var eqHighDb by remember { mutableStateOf(0f) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exporting = exportState is ExportState.Running
@@ -657,11 +663,16 @@ fun KinetixStudioApp(
 
     DisposableEffect(activeMediaPath) {
         val playback = activeMediaPath?.let { AudioPlayback(it) }
+        playback?.setEq(eqLowDb, eqMidDb, eqHighDb)
         audioPlayback = playback
         onDispose {
             playback?.close()
             audioPlayback = null
         }
+    }
+
+    LaunchedEffect(eqLowDb, eqMidDb, eqHighDb, audioPlayback) {
+        audioPlayback?.setEq(eqLowDb, eqMidDb, eqHighDb)
     }
 
     LaunchedEffect(isPlaying, audioPlayback) {
@@ -1120,6 +1131,9 @@ fun KinetixStudioApp(
                     TextButton(onClick = { showMedia = true }) {
                         Text("Media")
                     }
+                    TextButton(onClick = { showEq = true }) {
+                        Text("EQ")
+                    }
                     TextButton(onClick = { showProjects = true }) {
                         Text("Projects")
                     }
@@ -1363,6 +1377,33 @@ fun KinetixStudioApp(
                 },
             )
         }
+        if (showEq) {
+            AlertDialog(
+                onDismissRequest = { showEq = false },
+                title = { Text("Audio EQ") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        EqRow("Low 200 Hz", eqLowDb) { eqLowDb = it }
+                        EqRow("Mid 1 kHz", eqMidDb) { eqMidDb = it }
+                        EqRow("High 4 kHz", eqHighDb) { eqHighDb = it }
+                        TextButton(
+                            onClick = {
+                                eqLowDb = 0f
+                                eqMidDb = 0f
+                                eqHighDb = 0f
+                            },
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showEq = false }) {
+                        Text("Close")
+                    }
+                },
+            )
+        }
         if (showSettings) {
             AlertDialog(
                 onDismissRequest = { showSettings = false },
@@ -1596,6 +1637,37 @@ private fun ModuleRow(module: StudioModule) {
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
             )
+        }
+    }
+}
+
+@Composable
+private fun EqRow(
+    label: String,
+    valueDb: Float,
+    onChange: (Float) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        TextButton(
+            onClick = { onChange((valueDb - 1f).coerceIn(-12f, 12f)) },
+            modifier = Modifier.height(40.dp),
+        ) {
+            Text("−")
+        }
+        Text(
+            text = if (valueDb > 0f) "+${valueDb.toInt()} dB" else "${valueDb.toInt()} dB",
+            modifier = Modifier.width(64.dp),
+            textAlign = TextAlign.Center,
+        )
+        TextButton(
+            onClick = { onChange((valueDb + 1f).coerceIn(-12f, 12f)) },
+            modifier = Modifier.height(40.dp),
+        ) {
+            Text("+")
         }
     }
 }

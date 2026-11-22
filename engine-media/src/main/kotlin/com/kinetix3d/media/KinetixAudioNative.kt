@@ -42,4 +42,18 @@ object KinetixAudioNative {
         sampleRate: Float,
         state: FloatArray,
     )
+
+    /**
+     * Three-band EQ (low shelf 200 Hz, peak 1 kHz, high shelf 4 kHz).
+     * [state] is 12 floats (2 channels x 3 bands x 2 history values).
+     */
+    external fun applyEq(
+        samples: FloatArray,
+        lowDb: Float,
+        midDb: Float,
+        highDb: Float,
+        sampleRate: Float,
+        channels: Int,
+        state: FloatArray,
+    )
 }

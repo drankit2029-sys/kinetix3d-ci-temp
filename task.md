@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Actions row horizontal scroll (no more squeezed Projects/Settings).
-- Move builds/tests/emulators to the Oracle VM.
+- Rust 3-band EQ (ABI 4) + phone-first EQ dialog.
+- Verify the EQ on the VM build and emulator.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -102,10 +102,11 @@ Updated: 2026-11-19
 - Adaptive timeline height: 220dp on screens shorter than 600dp (landscape/small phones), 300dp otherwise.
 - Rust soft-knee compressor (ABI 3): `applyCompressor` runs a one-pole envelope follower with attack/release coefficients and a 4:1 soft knee above 0.7; the Kotlin AudioTrack path applies it before the limiter. DSP extracted into pure Rust functions with 4 `cargo test` cases (quiet passthrough, attenuation, envelope tracking, cross-buffer state).
 - Actions row is horizontally scrollable: Add Marker / Markers / Keys / Media / Projects / Add Overlay / Settings / Set In / Set Out / Split All / Undo / Redo no longer squeeze "Projects" into a vertical column on 411dp phones. Phone-verified.
+- Rust 3-band EQ (ABI 4): low shelf 200 Hz, peak 1 kHz (Q 0.7), high shelf 4 kHz, direct-form-II biquads with 12-float cross-buffer state. `AudioPlayback.setEq` applies it before the compressor; the EQ dialog has −/value/+ rows (1 dB steps, ±12 dB) and Reset. 4 new `cargo test` cases (flat identity, low boost, high cut, split-buffer continuity) — 8/8 total.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Heavy work moved to the Oracle Cloud VM (16 vCPU, 31 GB RAM, KVM; SSH over Cloudflare HTTPS). VM access doc: `../VM-ACCESS.md`; VM coordination log: `/home/ubuntu/talk.txt`. JDK 21, Rust/cargo-ndk/NDK, and the repo clone are being set up there.
+- Heavy work moved to the Oracle Cloud VM (16 vCPU, 31 GB RAM, KVM; SSH over Cloudflare HTTPS). VM access doc: `../VM-ACCESS.md`; VM coordination log: `/home/ubuntu/talk.txt`. VM setup complete: JDK 21, Rust 1.100 + cargo-ndk 4.1.2 + four Android targets, NDK r28c, SDK platform 37.1, repo cloned; `:app:assembleDebug`, the full unit-test/lint suite, ktlint (101 files) and `cargo test` (8/8) are green there.
 - Re-verify culling/transient trim, audio/mute/Rust limiter/drift, per-asset waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next

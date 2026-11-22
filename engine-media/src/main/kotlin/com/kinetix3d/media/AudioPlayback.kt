@@ -35,10 +35,21 @@ class AudioPlayback(
 
     private val wakeLock = Object()
     private val compressorState = FloatArray(1)
+    private val eqState = FloatArray(12)
+
+    @Volatile
+    private var eqLowDb = 0f
+
+    @Volatile
+    private var eqMidDb = 0f
+
+    @Volatile
+    private var eqHighDb = 0f
 
     fun start(ptsUs: Long) {
         if (running) return
         startPtsUs = ptsUs.coerceAtLeast(0L)
+        eqState.fill(0f)
         running = true
         thread =
             Thread({ decodeLoop() }, "KinetixAudioDecode").also { it.start() }
@@ -46,6 +57,17 @@ class AudioPlayback(
 
     fun setVolume(volume: Float) {
         runCatching { audioTrack?.setVolume(volume.coerceIn(0f, 1f)) }
+    }
+
+    /** Three-band EQ gains in dB; 0 dB is flat. */
+    fun setEq(
+        lowDb: Float,
+        midDb: Float,
+        highDb: Float,
+    ) {
+        eqLowDb = lowDb.coerceIn(-12f, 12f)
+        eqMidDb = midDb.coerceIn(-12f, 12f)
+        eqHighDb = highDb.coerceIn(-12f, 12f)
     }
 
     /** Source timestamp the current playback started from. */
@@ -147,6 +169,17 @@ class AudioPlayback(
                         val shorts = ShortArray(info.size / 2)
                         buffer.asShortBuffer().get(shorts)
                         val floats = FloatArray(shorts.size) { shorts[it] / 32768f }
+                        runCatching {
+                            KinetixAudioNative.applyEq(
+                                samples = floats,
+                                lowDb = eqLowDb,
+                                midDb = eqMidDb,
+                                highDb = eqHighDb,
+                                sampleRate = sampleRate.toFloat(),
+                                channels = channels.coerceIn(1, 2),
+                                state = eqState,
+                            )
+                        }
                         runCatching {
                             KinetixAudioNative.applyCompressor(
                                 samples = floats,
