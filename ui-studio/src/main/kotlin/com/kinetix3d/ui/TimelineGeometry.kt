@@ -74,6 +74,24 @@ internal fun hitTestClipEdge(
     }
 }
 
+internal fun hitTestMarker(
+    x: Float,
+    y: Float,
+    markers: List<com.kinetix3d.model.TimelineMarker>,
+    widthPx: Float,
+    rulerPx: Float,
+    durationUs: Long,
+    hitPx: Float,
+): com.kinetix3d.model.TimelineMarker? {
+    if (y > rulerPx || widthPx <= 0f || durationUs <= 0L) return null
+    return markers
+        .minByOrNull { marker ->
+            abs(x - (marker.ptsUs.toFloat() / durationUs.toFloat()) * widthPx)
+        }?.takeIf { marker ->
+            abs(x - (marker.ptsUs.toFloat() / durationUs.toFloat()) * widthPx) <= hitPx
+        }
+}
+
 internal fun xToUs(
     x: Float,
     widthPx: Float,

@@ -1,6 +1,7 @@
 package com.kinetix3d.ui
 
 import androidx.compose.ui.graphics.Color
+import com.kinetix3d.model.TimelineMarker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -18,6 +19,17 @@ class TimelineInteractionTest {
     private val trackPx = 44f
     private val durationUs = 10_000_000L
     private val edgeHitPx = 24f
+
+    @Test
+    fun `marker ticks have a coarse hit target`() {
+        val markers = listOf(TimelineMarker("m1", 2_000_000L), TimelineMarker("m2", 8_000_000L))
+        assertEquals(
+            "m1",
+            hitTestMarker(210f, 10f, markers, widthPx, rulerPx, durationUs, 12f)?.markerId,
+        )
+        assertNull(hitTestMarker(230f, 10f, markers, widthPx, rulerPx, durationUs, 12f))
+        assertNull(hitTestMarker(200f, rulerPx + 10f, markers, widthPx, rulerPx, durationUs, 12f))
+    }
 
     @Test
     fun `clip edges have generous hit targets`() {

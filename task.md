@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Per-asset thumbnails and waveforms.
-- Verify clips use their own media asset.
+- Tappable timeline markers (12dp ruler hit target).
+- Verify marker seek.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -95,6 +95,7 @@ Updated: 2026-11-19
 - Roadmap UI compliance: timeline clips are culled to the visible scroll range; trim drags now update the preview state only and commit one undo entry + one snapshot on release (matching the TransientMutationManager guideline).
 - Media pool asset deletion: the Media dialog has a Delete action that removes the asset from `mediaPool` and persists the snapshot.
 - Per-asset thumbnails/waveforms: `TimelineClipUi.assetId` maps clips to media-pool URIs; thumbnails and waveforms are generated per asset (cached per path) and fall back to the active source.
+- Tappable markers: `hitTestMarker` gives ruler ticks a 12dp coarse hit target; tapping a marker seeks to it. JVM test covers hit/miss/ruler bounds.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.

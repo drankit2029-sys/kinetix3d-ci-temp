@@ -513,8 +513,10 @@ private fun TimelineCanvas(
     val rulerPx = with(density) { rulerHeight.toPx() }
     val trackPx = with(density) { trackHeight.toPx() }
     val edgeHitPx = with(density) { TRIM_EDGE_HIT_DP.dp.toPx() }
+    val markerHitPx = with(density) { MARKER_HIT_DP.dp.toPx() }
     val totalHeight = rulerPx + trackPx * project.tracks.size
     val currentProject by rememberUpdatedState(project)
+    val currentMarkers by rememberUpdatedState(markers)
     val currentSelectedClipId by rememberUpdatedState(selectedClipId)
     val currentOnSelectClip by rememberUpdatedState(onSelectClip)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
@@ -539,21 +541,35 @@ private fun TimelineCanvas(
                 .height(with(density) { totalHeight.toDp() })
                 .pointerInput(durationUs, widthPx) {
                     detectTapGestures { offset ->
-                        val hit =
-                            hitTestClip(
+                        val marker =
+                            hitTestMarker(
                                 x = offset.x,
                                 y = offset.y,
-                                project = currentProject,
+                                markers = currentMarkers,
                                 widthPx = widthPx,
                                 rulerPx = rulerPx,
-                                trackPx = trackPx,
                                 durationUs = durationUs,
+                                hitPx = markerHitPx,
                             )
-                        if (hit != null) {
-                            currentOnSelectClip(if (hit.id == currentSelectedClipId) null else hit.id)
+                        if (marker != null) {
+                            currentOnPlayheadChange(marker.ptsUs)
                         } else {
-                            // Seeking must not clear the selection: Split/Delete act on it.
-                            currentOnPlayheadChange(xToUs(offset.x, widthPx, durationUs))
+                            val hit =
+                                hitTestClip(
+                                    x = offset.x,
+                                    y = offset.y,
+                                    project = currentProject,
+                                    widthPx = widthPx,
+                                    rulerPx = rulerPx,
+                                    trackPx = trackPx,
+                                    durationUs = durationUs,
+                                )
+                            if (hit != null) {
+                                currentOnSelectClip(if (hit.id == currentSelectedClipId) null else hit.id)
+                            } else {
+                                // Seeking must not clear the selection: Split/Delete act on it.
+                                currentOnPlayheadChange(xToUs(offset.x, widthPx, durationUs))
+                            }
                         }
                     }
                 }.pointerInput(durationUs, widthPx, edgeHitPx) {
@@ -762,6 +778,7 @@ private fun TimelineCanvas(
 }
 
 private const val TRIM_STEP_US = 500_000L
+private const val MARKER_HIT_DP = 12f
 
 private fun formatTime(us: Long): String {
     val totalMs = (us / 1_000L).coerceAtLeast(0L)
