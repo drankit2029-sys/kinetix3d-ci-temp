@@ -26,7 +26,12 @@ class AudioPlayback(
 
     @Volatile
     private var running = false
+
+    @Volatile
     private var startPtsUs = 0L
+
+    @Volatile
+    private var sampleRate = 48_000
 
     private val wakeLock = Object()
 
@@ -40,6 +45,20 @@ class AudioPlayback(
 
     fun setVolume(volume: Float) {
         runCatching { audioTrack?.setVolume(volume.coerceIn(0f, 1f)) }
+    }
+
+    /** Source timestamp the current playback started from. */
+    fun startPtsUs(): Long = startPtsUs
+
+    /** Frames played since [start], converted to microseconds. */
+    fun positionUs(): Long {
+        val frames = audioTrack?.playbackHeadPosition ?: 0
+        return frames.toLong() * 1_000_000L / sampleRate.coerceAtLeast(1)
+    }
+
+    fun restart(ptsUs: Long) {
+        stop()
+        start(ptsUs)
     }
 
     fun stop() {
@@ -74,6 +93,7 @@ class AudioPlayback(
             }
             mediaExtractor.selectTrack(trackIndex)
             val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            this.sampleRate = sampleRate
             val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             val channelOut =
                 if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
