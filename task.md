@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Usable MVP with refined UI (target 2-4 weeks).
-- Then device-specific GPU/codec risk hardening (target 2-4 weeks).
+- MVP week 1: multi-track compositor + export polish.
+- Then UI refinement, stability, and device-matrix hardening.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -105,7 +105,9 @@ Updated: 2026-11-19
 - Rust 3-band EQ (ABI 4): low shelf 200 Hz, peak 1 kHz (Q 0.7), high shelf 4 kHz, direct-form-II biquads with 12-float cross-buffer state. `AudioPlayback.setEq` applies it before the compressor; the EQ dialog has −/value/+ rows (1 dB steps, ±12 dB) and Reset. 4 new `cargo test` cases (flat identity, low boost, high cut, split-buffer continuity) — 8/8 total.
 - EQ verified on the VM emulator (`k3d-api36`, API 36): ABI 4 loads (`libkinetix_audio loaded, abi=4`), the EQ dialog opens, Low +3 dB updates, Reset returns all bands to 0 dB.
 - Media pool bins/tags: `MediaAssetDescriptor.binId` + `tags`; `ProjectEditor.setAssetBin` / `addAssetTag` / `removeAssetTag`; the Media dialog groups assets by bin, cycles bins with a tap, opens a tag editor, and adds a specific asset to the timeline with its `assetId` bound. `addOverlay` now binds the media-pool asset ID instead of the file path. JVM tests cover bin moves, tag add/remove, asset-bound clips, and protobuf round-trip.
-- Bins/tags verified on the VM emulator (`k3d-api36`): imported a real MP4, cycled `default → b-roll`, added `#hero`, and Add-to-timeline created a clip bound to the asset. Polish item: the timeline label currently shows the raw asset ID; show a human-readable asset name instead.
+- Bins/tags verified on the VM emulator (`k3d-api36`): imported a real MP4, cycled `default → b-roll`, added `#hero`, and Add-to-timeline created a clip bound to the asset.
+- Human-readable media names: `MediaAssetDescriptor.name` + `displayName()`; the SAF import stores `OpenableColumns.DISPLAY_NAME`; timeline labels and the Media dialog use the name (falling back to the URI file name). Verified on the emulator: the V1 clip now shows `kinetix-import-…mp4` instead of the raw asset ID.
+- Audio master clock: `AudioPlayback.isActive()`; `TimelinePanel` drives the playhead from the AudioTrack position when audio is active and falls back to the wall clock otherwise; the 500ms drift-correction restart loop is gone. Emulator playback verified to 00:04.016 at 55 fps (the emulator runs `-no-audio`, so the audio-driven branch needs a device with audio for final sign-off).
 
 ## MVP plan (target 2-4 weeks)
 
