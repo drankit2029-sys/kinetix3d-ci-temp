@@ -111,7 +111,7 @@ class ExportForegroundService : Service() {
                         )
                     output.delete()
                     mutableState.value = ExportState.Success(uri.toString(), result.frames)
-                    updateNotification(1f, "Export complete")
+                    notifyCompletion(uri.toString(), result.frames)
                 } catch (throwable: Throwable) {
                     if (throwable is CancellationException || cancelRequested) {
                         mutableState.value = ExportState.Cancelled
@@ -169,6 +169,32 @@ class ExportForegroundService : Service() {
         ).addAction(0, "Cancel", cancelPendingIntent())
         .build()
 
+    private fun notifyCompletion(
+        uri: String,
+        frames: Int,
+    ) {
+        val viewIntent =
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val pending =
+            PendingIntent.getActivity(
+                this,
+                2,
+                viewIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val notification =
+            NotificationCompat
+                .Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("Export complete")
+                .setContentText("$frames frames")
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .build()
+        getSystemService(NotificationManager::class.java).notify(COMPLETION_ID, notification)
+    }
+
     private fun cancelPendingIntent(): PendingIntent {
         val intent = Intent(this, ExportForegroundService::class.java).setAction(ACTION_CANCEL)
         return PendingIntent.getService(
@@ -190,6 +216,7 @@ class ExportForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "kinetix-export"
         private const val NOTIFICATION_ID = 4101
+        private const val COMPLETION_ID = 4102
         private const val ACTION_CANCEL = "com.kinetix3d.studio.action.CANCEL_EXPORT"
         private const val EXTRA_SOURCE = "source"
         private const val EXTRA_START_US = "startUs"
