@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Rust 3-band EQ (ABI 4) + phone-first EQ dialog.
-- Verify the EQ on the VM build and emulator.
+- Media pool bins/tags and per-asset clip binding.
+- Verify bins/tags on the VM emulator.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -103,6 +103,7 @@ Updated: 2026-11-19
 - Rust soft-knee compressor (ABI 3): `applyCompressor` runs a one-pole envelope follower with attack/release coefficients and a 4:1 soft knee above 0.7; the Kotlin AudioTrack path applies it before the limiter. DSP extracted into pure Rust functions with 4 `cargo test` cases (quiet passthrough, attenuation, envelope tracking, cross-buffer state).
 - Actions row is horizontally scrollable: Add Marker / Markers / Keys / Media / Projects / Add Overlay / Settings / Set In / Set Out / Split All / Undo / Redo no longer squeeze "Projects" into a vertical column on 411dp phones. Phone-verified.
 - Rust 3-band EQ (ABI 4): low shelf 200 Hz, peak 1 kHz (Q 0.7), high shelf 4 kHz, direct-form-II biquads with 12-float cross-buffer state. `AudioPlayback.setEq` applies it before the compressor; the EQ dialog has −/value/+ rows (1 dB steps, ±12 dB) and Reset. 4 new `cargo test` cases (flat identity, low boost, high cut, split-buffer continuity) — 8/8 total.
+- EQ verified on the VM emulator (`k3d-api36`, API 36): ABI 4 loads (`libkinetix_audio loaded, abi=4`), the EQ dialog opens, Low +3 dB updates, Reset returns all bands to 0 dB.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
