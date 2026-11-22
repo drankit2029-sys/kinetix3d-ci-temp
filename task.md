@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- MVP week 1: composite blend modes + export polish.
-- Then UI refinement, stability, and device-matrix hardening.
+- MVP week 2: UI refinement + stability.
+- Then the emulator device matrix and GPU/codec hardening.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -111,6 +111,7 @@ Updated: 2026-11-19
 - Composite blend modes: the composite shader supports Normal/Screen/Multiply/Add via a `uBlendMode` uniform; `demoCompositeGraph(blendMode)` carries the param; the UI shows blend-mode chips when Composite is selected. `DemoGraphTest` covers the graph param.
 - Export polish: Cancel button + `ExportForegroundService.cancel`, ranged export duration fixed (`rangeEnd - rangeStart`), export uses the active/overlay asset paths, and the status moved to its own ellipsized line.
 - Compact header: Kinetix3D + project name row, 16dp content padding, single-line preview/status/source labels, and timeline clip labels constrained to the clip width.
+- Portrait-only MVP: `MainActivity` is `screenOrientation="portrait"` and handles orientation/screenSize config changes, so the editor state survives rotation. The emulator's landscape layout was broken (content clipped/zoomed), so landscape is deferred to v1.0; the phone-first editor is portrait-first.
 
 ## MVP plan (target 2-4 weeks)
 
