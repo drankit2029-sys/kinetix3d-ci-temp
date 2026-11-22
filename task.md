@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Media pool bins/tags and per-asset clip binding.
-- Verify bins/tags and Add-to-timeline on the VM emulator.
+- Usable MVP with refined UI (target 2-4 weeks).
+- Then device-specific GPU/codec risk hardening (target 2-4 weeks).
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -105,6 +105,32 @@ Updated: 2026-11-19
 - Rust 3-band EQ (ABI 4): low shelf 200 Hz, peak 1 kHz (Q 0.7), high shelf 4 kHz, direct-form-II biquads with 12-float cross-buffer state. `AudioPlayback.setEq` applies it before the compressor; the EQ dialog has −/value/+ rows (1 dB steps, ±12 dB) and Reset. 4 new `cargo test` cases (flat identity, low boost, high cut, split-buffer continuity) — 8/8 total.
 - EQ verified on the VM emulator (`k3d-api36`, API 36): ABI 4 loads (`libkinetix_audio loaded, abi=4`), the EQ dialog opens, Low +3 dB updates, Reset returns all bands to 0 dB.
 - Media pool bins/tags: `MediaAssetDescriptor.binId` + `tags`; `ProjectEditor.setAssetBin` / `addAssetTag` / `removeAssetTag`; the Media dialog groups assets by bin, cycles bins with a tap, opens a tag editor, and adds a specific asset to the timeline with its `assetId` bound. `addOverlay` now binds the media-pool asset ID instead of the file path. JVM tests cover bin moves, tag add/remove, asset-bound clips, and protobuf round-trip.
+- Bins/tags verified on the VM emulator (`k3d-api36`): imported a real MP4, cycled `default → b-roll`, added `#hero`, and Add-to-timeline created a clip bound to the asset. Polish item: the timeline label currently shows the raw asset ID; show a human-readable asset name instead.
+
+## MVP plan (target 2-4 weeks)
+
+1. **Core polish + audio (week 1)**
+   - Human-readable asset names in the timeline/media pool; tag chips and search/filter.
+   - Audio master clock + native Rust audio engine (AAudio/cpal) with EQ/compressor/limiter; remove the drift-correction hack.
+   - Multi-track compositor (V2 overlay per track, blend modes).
+   - Export polish: in-UI progress, cancel, completion notification, error handling, 4K/1080p/bitrate/in-out.
+2. **UI refinement (week 2)**
+   - Design system: colors, typography, spacing, icons.
+   - Timeline: track headers, clip labels, selected state, playhead, zoom, marker lane, snapping.
+   - Preview: aspect ratio, safe areas, fullscreen, FX rack.
+   - Media pool: grid/list, bins, tags, search, import progress.
+   - Dialogs: settings, export, project, markers, EQ, keys; consistent layout.
+   - Accessibility: 24dp targets, content descriptions, contrast, landscape/short screens.
+3. **Stability + tests (week 3)**
+   - Lifecycle: rotation, background/foreground, surface loss, decoder release.
+   - Export cancel/retry, low-memory, corrupt media, SAF edge cases.
+   - JVM tests for new logic; screenshot tests on the emulator.
+   - Device matrix: API 26/28/30/33/35/36/37, low/mid/high RAM, GPU modes.
+4. **Risk hardening (weeks 4-8)**
+   - GPU: GLES 3.2/3.1/3.0/2.0 fallbacks, FBO formats, max texture size, shader compile, context loss, 16KB pages.
+   - Codec: H.264/H.265/AV1, 4K, 10-bit, HDR, VFR, rotation, audio layouts, MediaCodec quirks.
+   - Thermal/battery/storage; device profiles.
+   - Fix issues found; final sign-off on physical devices (the VM covers API/GPU-mode regressions, not real hardware quirks).
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
@@ -112,11 +138,11 @@ Updated: 2026-11-19
 - Re-verify culling/transient trim, audio/mute/Rust limiter/drift, per-asset waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
-- V2 clip-driven overlay source and per-track compositing.
-- Export foreground service for long exports.
-- Rust audio engine wiring.
-- More operator kernels (Warp, Glitch, Vectorify, Keyer, …).
-- Phone-first interaction audit for every new control.
+- MVP week 1: human-readable asset names, audio master clock + native Rust audio engine, multi-track compositor, export polish.
+- MVP week 2: design-system/UI refinement, timeline/media/preview/dialog polish, accessibility.
+- MVP week 3: lifecycle/stability tests, emulator device matrix.
+- Risk hardening: GPU fallbacks, codec matrix, thermal/storage, physical-device sign-off.
+- After the hardened MVP: Phase 4 (OmniTrackpad/curve editor), Phase 5 (plugin SDK/operator parity), Phase 6 (3D stage/HDR), Phase 7 (AI suite).
 
 ## Testing notes
 - Phone: USB `RZCY61Z8TPD`; WiFi `10.49.246.235:5555`; hotspot fallback if USB drops.
