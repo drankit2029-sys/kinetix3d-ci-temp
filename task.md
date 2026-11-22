@@ -113,6 +113,7 @@ Updated: 2026-11-19
 - Compact header: Kinetix3D + project name row, 16dp content padding, single-line preview/status/source labels, and timeline clip labels constrained to the clip width.
 - Portrait-only MVP: `MainActivity` is `screenOrientation="portrait"` and handles orientation/screenSize config changes, so the editor state survives rotation. The emulator's landscape layout was broken (content clipped/zoomed), so landscape is deferred to v1.0; the phone-first editor is portrait-first.
 - Timeline height: 220dp on screens shorter than 800dp (e.g. Pixel 2 at 731dp), 300dp otherwise, so the timeline fits short phones better.
+- Settings and Markers dialogs verified on the audio-enabled API 36 emulator: resolution/fps/export presets and the empty-markers state render correctly.
 
 ## MVP plan (target 2-4 weeks)
 

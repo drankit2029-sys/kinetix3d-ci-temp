@@ -73,7 +73,16 @@ class HardwareExportSession(
         var overlaySource: SynchronousVideoSource? = null
         var executor: DagRenderExecutor? = null
         try {
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            try {
+                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            } catch (throwable: Throwable) {
+                val width = format.getInteger(MediaFormat.KEY_WIDTH)
+                val height = format.getInteger(MediaFormat.KEY_HEIGHT)
+                throw IllegalStateException(
+                    "Encoder does not support $width×$height; choose a lower export resolution",
+                    throwable,
+                )
+            }
             inputSurface = encoder.createInputSurface()
             encoder.start()
             outputFile.parentFile?.mkdirs()
