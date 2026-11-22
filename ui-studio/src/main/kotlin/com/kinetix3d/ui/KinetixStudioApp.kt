@@ -202,6 +202,7 @@ fun KinetixStudioApp(
     var selectedClipId by remember { mutableStateOf<String?>(null) }
     var selectedEffects by remember { mutableStateOf<List<String>>(emptyList()) }
     var compositeBlendMode by remember { mutableIntStateOf(0) }
+    var showFxRack by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var renderStats by remember { mutableStateOf(RenderStats()) }
@@ -1009,15 +1010,27 @@ fun KinetixStudioApp(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                Text(
-                    text =
-                        "${settings.width}×${settings.height} · ${settings.fps.toInt()} fps · " +
-                            "${(settings.height * previewScale).toInt()}p PREVIEW · $effectLabel",
-                    color = StudioMuted,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text =
+                            "${settings.width}×${settings.height} · ${settings.fps.toInt()} fps · " +
+                                "${(settings.height * previewScale).toInt()}p PREVIEW · $effectLabel",
+                        color = StudioMuted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = { showFxRack = !showFxRack },
+                        modifier = Modifier.height(32.dp),
+                    ) {
+                        Text(if (showFxRack) "Hide FX" else "Show FX", fontSize = 11.sp)
+                    }
+                }
                 Text(
                     text =
                         "preview ${renderStats.fps.roundToInt()} fps · " +
@@ -1038,41 +1051,7 @@ fun KinetixStudioApp(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = selectedEffects.isEmpty(),
-                        onClick = { selectedEffects = emptyList() },
-                        label = { Text("Clean") },
-                    )
-                    FilterChip(
-                        selected = selectedEffects == listOf("color"),
-                        onClick = { selectedEffects = listOf("color") },
-                        label = { Text("Color") },
-                    )
-                    FilterChip(
-                        selected = selectedEffects == listOf("composite"),
-                        onClick = { selectedEffects = listOf("composite") },
-                        label = { Text("Composite") },
-                    )
-                    listOf("warp", "glitch", "vectorify", "keyer", "oscillate", "optics", "style", "corner")
-                        .forEach { effect ->
-                            FilterChip(
-                                selected = effect in selectedEffects,
-                                onClick = {
-                                    val base = selectedEffects.filter { it != "color" }
-                                    selectedEffects = if (effect in base) base - effect else base + effect
-                                },
-                                label = { Text(effect.replaceFirstChar { it.uppercase() }) },
-                            )
-                        }
-                }
-                if (selectedEffects == listOf("composite")) {
+                if (showFxRack) {
                     Row(
                         modifier =
                             Modifier
@@ -1080,12 +1059,48 @@ fun KinetixStudioApp(
                                 .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        COMPOSITE_BLEND_MODES.forEachIndexed { index, name ->
-                            FilterChip(
-                                selected = compositeBlendMode == index,
-                                onClick = { compositeBlendMode = index },
-                                label = { Text(name) },
-                            )
+                        FilterChip(
+                            selected = selectedEffects.isEmpty(),
+                            onClick = { selectedEffects = emptyList() },
+                            label = { Text("Clean") },
+                        )
+                        FilterChip(
+                            selected = selectedEffects == listOf("color"),
+                            onClick = { selectedEffects = listOf("color") },
+                            label = { Text("Color") },
+                        )
+                        FilterChip(
+                            selected = selectedEffects == listOf("composite"),
+                            onClick = { selectedEffects = listOf("composite") },
+                            label = { Text("Composite") },
+                        )
+                        listOf("warp", "glitch", "vectorify", "keyer", "oscillate", "optics", "style", "corner")
+                            .forEach { effect ->
+                                FilterChip(
+                                    selected = effect in selectedEffects,
+                                    onClick = {
+                                        val base = selectedEffects.filter { it != "color" }
+                                        selectedEffects = if (effect in base) base - effect else base + effect
+                                    },
+                                    label = { Text(effect.replaceFirstChar { it.uppercase() }) },
+                                )
+                            }
+                    }
+                    if (selectedEffects == listOf("composite")) {
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            COMPOSITE_BLEND_MODES.forEachIndexed { index, name ->
+                                FilterChip(
+                                    selected = compositeBlendMode == index,
+                                    onClick = { compositeBlendMode = index },
+                                    label = { Text(name) },
+                                )
+                            }
                         }
                     }
                 }
