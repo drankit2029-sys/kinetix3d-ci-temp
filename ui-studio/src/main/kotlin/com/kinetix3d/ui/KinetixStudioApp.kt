@@ -408,6 +408,20 @@ fun KinetixStudioApp(
             }
         }
     }
+    val removeAsset: (String) -> Unit = { assetId ->
+        val updated = demoState.copy(mediaPool = demoState.mediaPool.remove(assetId))
+        if (updated != demoState) {
+            applyEdit(updated)
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "asset removed" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
     val removeMarker: (String) -> Unit = { markerId ->
         val updated = ProjectEditor.removeMarker(demoState, markerId)
         if (updated != demoState) {
@@ -1224,6 +1238,9 @@ fun KinetixStudioApp(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp,
                                 )
+                                TextButton(onClick = { removeAsset(asset.assetId) }) {
+                                    Text("Delete")
+                                }
                             }
                         }
                     }

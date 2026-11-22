@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Roadmap UI compliance: viewport culling + transient trim drags.
-- Verify culling and one-commit-per-drag.
+- Media pool asset deletion.
+- Verify delete removes the asset and persists.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -93,6 +93,7 @@ Updated: 2026-11-19
 - Audio/video drift correction: `AudioPlayback.positionUs()` exposes the AudioTrack frame position; the studio checks every 500ms and restarts audio at the playhead when drift exceeds 250ms (covers seek-while-playing).
 - Export completion notification: a non-ongoing notification with the frame count and a gallery content intent, posted after the foreground notification is removed.
 - Roadmap UI compliance: timeline clips are culled to the visible scroll range; trim drags now update the preview state only and commit one undo entry + one snapshot on release (matching the TransientMutationManager guideline).
+- Media pool asset deletion: the Media dialog has a Delete action that removes the asset from `mediaPool` and persists the snapshot.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
