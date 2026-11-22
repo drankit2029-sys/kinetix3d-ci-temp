@@ -29,6 +29,7 @@ class DagRenderExecutor(
     private val glitch = GlitchKernel()
     private val vectorify = VectorifyKernel()
     private val keyer = KeyerKernel()
+    private val oscillate = OscillateKernel()
     private val composite = CompositeKernel()
 
     fun initialize(): Boolean =
@@ -44,6 +45,7 @@ class DagRenderExecutor(
             glitch.initialize() &&
             vectorify.initialize() &&
             keyer.initialize() &&
+            oscillate.initialize() &&
             composite.initialize()
 
     fun render(
@@ -325,6 +327,26 @@ class DagRenderExecutor(
                         checkGl("keyer")
                     }
 
+                    "kinetix.oscillate" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        oscillate.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            amplitude = param(graph, pass.nodeId, "amplitude", 0.01f),
+                            frequency = param(graph, pass.nodeId, "frequency", 2f),
+                            seed = param(graph, pass.nodeId, "seed", 0f),
+                            timeSeconds = ptsUs / 1_000_000f,
+                            mode = modeIndex(pass.modeId, "oscillate", "auto_shake"),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("oscillate")
+                    }
+
                     "kinetix.composite" -> {
                         val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         val overlay = overlaySource
@@ -439,6 +461,7 @@ class DagRenderExecutor(
         glitch.release()
         vectorify.release()
         keyer.release()
+        oscillate.release()
         composite.release()
         overlaySource?.release()
         source.release()

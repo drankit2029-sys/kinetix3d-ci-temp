@@ -29,6 +29,7 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
                 "glitch" -> "kinetix.glitch"
                 "vectorify" -> "kinetix.vectorify"
                 "keyer" -> "kinetix.keyer"
+                "oscillate" -> "kinetix.oscillate"
                 else -> return@forEach
             }
         val params =
@@ -49,6 +50,13 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
 
                 "vectorify" -> {
                     persistentMapOf("levels" to ParamChannel.constant(8f))
+                }
+
+                "oscillate" -> {
+                    persistentMapOf(
+                        "amplitude" to ParamChannel.constant(0.01f),
+                        "frequency" to ParamChannel.constant(2f),
+                    )
                 }
 
                 else -> {

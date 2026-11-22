@@ -927,3 +927,82 @@ class CompositeKernel {
         """
     }
 }
+
+class OscillateKernel {
+    private val quad = FullscreenQuad()
+    private var textureLocation = -1
+    private var amplitudeLocation = -1
+    private var frequencyLocation = -1
+    private var seedLocation = -1
+    private var timeLocation = -1
+    private var modeLocation = -1
+
+    fun initialize(): Boolean {
+        if (!quad.create(FRAGMENT_SHADER)) return false
+        textureLocation = GLES20.glGetUniformLocation(quad.programId, "uTexture")
+        amplitudeLocation = GLES20.glGetUniformLocation(quad.programId, "uAmplitude")
+        frequencyLocation = GLES20.glGetUniformLocation(quad.programId, "uFrequency")
+        seedLocation = GLES20.glGetUniformLocation(quad.programId, "uSeed")
+        timeLocation = GLES20.glGetUniformLocation(quad.programId, "uTime")
+        modeLocation = GLES20.glGetUniformLocation(quad.programId, "uMode")
+        return textureLocation >= 0 && modeLocation >= 0
+    }
+
+    fun render(
+        inputTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        amplitude: Float,
+        frequency: Float,
+        seed: Float,
+        timeSeconds: Float,
+        mode: Int,
+    ) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
+        quad.use(0f, 0f, 1f, 1f)
+        GLES20.glUniform1i(textureLocation, 0)
+        GLES20.glUniform1f(amplitudeLocation, amplitude)
+        GLES20.glUniform1f(frequencyLocation, frequency)
+        GLES20.glUniform1f(seedLocation, seed)
+        GLES20.glUniform1f(timeLocation, timeSeconds)
+        GLES20.glUniform1i(modeLocation, mode)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+    }
+
+    fun release() = quad.release()
+
+    companion object {
+        private const val FRAGMENT_SHADER = """
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            uniform float uAmplitude;
+            uniform float uFrequency;
+            uniform float uSeed;
+            uniform float uTime;
+            uniform int uMode;
+            void main() {
+                float t = uTime * uFrequency * 6.2831853;
+                vec2 offset;
+                if (uMode == 0) {
+                    offset = vec2(
+                        sin(t + uSeed) * uAmplitude,
+                        cos(t + uSeed * 1.7) * uAmplitude
+                    );
+                } else {
+                    offset = vec2(
+                        sin(t + uSeed) * uAmplitude + sin(t * 2.3 + uSeed) * uAmplitude * 0.4,
+                        cos(t * 1.7 + uSeed) * uAmplitude + cos(t * 3.1 + uSeed) * uAmplitude * 0.3
+                    );
+                }
+                gl_FragColor = texture2D(uTexture, clamp(vUv + offset, 0.0, 1.0));
+            }
+        """
+    }
+}

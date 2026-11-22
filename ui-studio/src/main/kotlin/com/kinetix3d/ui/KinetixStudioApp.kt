@@ -817,7 +817,7 @@ fun KinetixStudioApp(
                         onClick = { selectedEffects = listOf("composite") },
                         label = { Text("Composite") },
                     )
-                    listOf("warp", "glitch", "vectorify", "keyer").forEach { effect ->
+                    listOf("warp", "glitch", "vectorify", "keyer", "oscillate").forEach { effect ->
                         FilterChip(
                             selected = effect in selectedEffects,
                             onClick = {
