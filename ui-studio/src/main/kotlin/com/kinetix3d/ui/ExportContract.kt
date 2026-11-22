@@ -16,6 +16,7 @@ data class ExportRequest(
     val effects: List<String>,
     val overlayPath: String? = null,
     val overlayPtsOffsetUs: Long = 0L,
+    val bitRate: Int = 12_000_000,
 )
 
 sealed interface ExportState {

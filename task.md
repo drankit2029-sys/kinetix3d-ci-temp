@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Timeline markers: add at the playhead, draw on the ruler, persist.
-- Verify marker rendering and persistence.
+- Export bitrate presets (6/12/24 Mbps).
+- Verify the bitrate flows to the encoder.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -85,10 +85,11 @@ Updated: 2026-11-19
 - Media pool: imports add a `MediaAssetDescriptor` (mime, size, duration, dimensions) to `ProjectState.mediaPool`, persisted in `.kproj`; the Media dialog lists assets and re-selects one as the active source.
 - Audio mute: `AudioPlayback.setVolume` + Mute/Unmute transport button.
 - Timeline markers: `TimelineMarker` in `ProjectState`, `ProjectEditor.addMarker/removeMarker`, Add Marker button, amber ruler ticks; JVM tests cover add/remove and `.kproj` round-trip.
+- Export bitrate presets: 6/12/24 Mbps in the settings dialog, carried through `ExportRequest`/the service to the encoder; the status label shows the selected bitrate.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio/mute, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, media pool, markers, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
+- Re-verify audio/mute, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, media pool, markers, bitrate, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

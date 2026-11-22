@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -199,6 +200,7 @@ fun KinetixStudioApp(
     var showSettings by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var showMedia by remember { mutableStateOf(false) }
+    var exportBitRate by remember { mutableIntStateOf(12_000_000) }
     var muted by remember { mutableStateOf(false) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
@@ -919,6 +921,7 @@ fun KinetixStudioApp(
                                         } else {
                                             0L
                                         },
+                                    bitRate = exportBitRate,
                                 ),
                             )
                         },
@@ -939,7 +942,9 @@ fun KinetixStudioApp(
                         Text("Import")
                     }
                     Text(
-                        text = exportStatus ?: "hardware H.264 · 1080p",
+                        text =
+                            exportStatus
+                                ?: "hardware H.264 · 1080p · ${exportBitRate / 1_000_000} Mbps",
                         color = StudioMuted,
                         fontSize = 11.sp,
                         modifier = Modifier.weight(1f),
@@ -1262,6 +1267,30 @@ fun KinetixStudioApp(
                                     onClick = null,
                                 )
                                 Text("${fps.toInt()} fps")
+                            }
+                        }
+                        Text(
+                            "Export bitrate",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        )
+                        listOf(6_000_000, 12_000_000, 24_000_000).forEach { rate ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = exportBitRate == rate,
+                                            onClick = { exportBitRate = rate },
+                                            role = Role.RadioButton,
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = exportBitRate == rate,
+                                    onClick = null,
+                                )
+                                Text("${rate / 1_000_000} Mbps")
                             }
                         }
                     }

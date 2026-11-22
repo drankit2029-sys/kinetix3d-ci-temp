@@ -94,6 +94,7 @@ class ExportForegroundService : Service() {
                             startUs = request.startUs,
                             overlayPath = request.overlayPath,
                             overlayPtsOffsetUs = request.overlayPtsOffsetUs,
+                            bitRate = request.bitRate,
                         ).export(
                             onProgress = { progress ->
                                 mutableState.value = ExportState.Running(progress)
@@ -192,6 +193,7 @@ class ExportForegroundService : Service() {
         private const val EXTRA_EFFECTS = "effects"
         private const val EXTRA_OVERLAY_PATH = "overlayPath"
         private const val EXTRA_OVERLAY_OFFSET_US = "overlayOffsetUs"
+        private const val EXTRA_BIT_RATE = "bitRate"
 
         private val mutableState = MutableStateFlow<ExportState>(ExportState.Idle)
         val state: StateFlow<ExportState> = mutableState.asStateFlow()
@@ -211,6 +213,7 @@ class ExportForegroundService : Service() {
                     putStringArrayListExtra(EXTRA_EFFECTS, ArrayList(request.effects))
                     putExtra(EXTRA_OVERLAY_PATH, request.overlayPath)
                     putExtra(EXTRA_OVERLAY_OFFSET_US, request.overlayPtsOffsetUs)
+                    putExtra(EXTRA_BIT_RATE, request.bitRate)
                 }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -227,6 +230,7 @@ class ExportForegroundService : Service() {
                 effects = getStringArrayListExtra(EXTRA_EFFECTS).orEmpty(),
                 overlayPath = getStringExtra(EXTRA_OVERLAY_PATH),
                 overlayPtsOffsetUs = getLongExtra(EXTRA_OVERLAY_OFFSET_US, 0L),
+                bitRate = getIntExtra(EXTRA_BIT_RATE, 12_000_000),
             )
         }
     }
