@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -841,6 +842,8 @@ fun KinetixStudioApp(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .padding(innerPadding)
+                        .navigationBarsPadding()
                         .focusRequester(focusRequester)
                         .focusable()
                         .onPreviewKeyEvent { event ->
