@@ -31,4 +31,15 @@ object KinetixAudioNative {
         gain: Float,
         limit: Float,
     )
+
+    /** Soft-knee compressor; [state] carries the envelope across buffers. */
+    external fun applyCompressor(
+        samples: FloatArray,
+        threshold: Float,
+        ratio: Float,
+        attackSeconds: Float,
+        releaseSeconds: Float,
+        sampleRate: Float,
+        state: FloatArray,
+    )
 }

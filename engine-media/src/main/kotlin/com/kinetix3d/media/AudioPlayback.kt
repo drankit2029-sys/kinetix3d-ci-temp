@@ -34,6 +34,7 @@ class AudioPlayback(
     private var sampleRate = 48_000
 
     private val wakeLock = Object()
+    private val compressorState = FloatArray(1)
 
     fun start(ptsUs: Long) {
         if (running) return
@@ -146,6 +147,17 @@ class AudioPlayback(
                         val shorts = ShortArray(info.size / 2)
                         buffer.asShortBuffer().get(shorts)
                         val floats = FloatArray(shorts.size) { shorts[it] / 32768f }
+                        runCatching {
+                            KinetixAudioNative.applyCompressor(
+                                samples = floats,
+                                threshold = 0.7f,
+                                ratio = 4f,
+                                attackSeconds = 0.01f,
+                                releaseSeconds = 0.1f,
+                                sampleRate = sampleRate.toFloat(),
+                                state = compressorState,
+                            )
+                        }
                         runCatching { KinetixAudioNative.applyGainAndLimit(floats, 1f, 0.98f) }
                         val pcm = ByteBuffer.allocate(floats.size * 2).order(ByteOrder.LITTLE_ENDIAN)
                         floats.forEach { sample ->

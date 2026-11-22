@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Adaptive timeline height for short/landscape screens.
-- Verify the compact layout.
+- Rust soft-knee compressor (ABI 3) in the AudioTrack path.
+- Verify ABI 3 loads and playback is clean on the phone.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -100,6 +100,7 @@ Updated: 2026-11-19
 - Transport header split into two rows: project name + time, then a horizontally scrollable Play/Mute/−/+/Fit row. Fixes the project name being squeezed to one character per line on 411dp phones.
 - Phone-verified: the two-row header renders correctly; the Keys and Media dialogs open and are readable.
 - Adaptive timeline height: 220dp on screens shorter than 600dp (landscape/small phones), 300dp otherwise.
+- Rust soft-knee compressor (ABI 3): `applyCompressor` runs a one-pole envelope follower with attack/release coefficients and a 4:1 soft knee above 0.7; the Kotlin AudioTrack path applies it before the limiter. DSP extracted into pure Rust functions with 4 `cargo test` cases (quiet passthrough, attenuation, envelope tracking, cross-buffer state).
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
