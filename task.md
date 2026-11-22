@@ -171,6 +171,7 @@ Updated: 2026-11-19
 - AV1 1080p: imports and decodes at ~10 fps, no crash.
 - Portrait H.264 screen recording: imports and plays.
 - Export from the AV1 1080p source: **180 frames**, H.264 1080p, published to `Movies/Kinetix3D/kinetix-export-…mp4`, no crash.
+- 4K export on the emulator's software H.264 encoder: configure fails (the encoder does not support 3840×2160). The app now reports **"Encoder does not support 3840×2160; choose a lower export resolution"** instead of an empty failure. 1080p export still succeeds. Next: disable/fallback 4K when the encoder capability check says it is unsupported.
 - Software GL (`-gpu off`): the app renders the AV1 source at 52 fps, RGBA16F, no crash.
 - 16KB page size: the Rust `.so` LOAD segments are aligned `0x4000`; `zipalign -c -P 16` passes.
 - The emulator's software decoders (`c2.android.avc.decoder`, `c2.android.hevc.decoder`, `c2.android.av1-dav1d.decoder`) all initialize cleanly.
