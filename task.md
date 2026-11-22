@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Oscillate / Auto-Shake kernel.
-- Verify the shake effect.
+- Optics kernel: god rays, anamorphic streak, chromatic aberration.
+- Verify the optics modes.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -79,10 +79,11 @@ Updated: 2026-11-19
 - Project catalog: `ProjectCatalog` lists/creates `.kproj` files; the Projects dialog opens a project or creates a new one; `MainActivity` swaps the `ProjectStore` per active project. JVM tests cover create/list, corrupt files and missing directories.
 - Export success now shows an Open button that launches the gallery viewer with the published MediaStore URI.
 - Oscillate / Auto-Shake kernel: sine/cos UV offset with amplitude/frequency/seed/time; `oscillate` chip in the FX rack.
+- Optics kernel: radial god rays, anamorphic streak and chromatic aberration; `optics` chip in the FX rack.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, Open and Oscillate on a stable display.
+- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, Open, Oscillate and Optics on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

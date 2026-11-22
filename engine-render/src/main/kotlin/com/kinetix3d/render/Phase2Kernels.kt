@@ -1006,3 +1006,74 @@ class OscillateKernel {
         """
     }
 }
+
+class OpticsKernel {
+    private val quad = FullscreenQuad()
+    private var textureLocation = -1
+    private var lengthLocation = -1
+    private var modeLocation = -1
+
+    fun initialize(): Boolean {
+        if (!quad.create(FRAGMENT_SHADER)) return false
+        textureLocation = GLES20.glGetUniformLocation(quad.programId, "uTexture")
+        lengthLocation = GLES20.glGetUniformLocation(quad.programId, "uLength")
+        modeLocation = GLES20.glGetUniformLocation(quad.programId, "uMode")
+        return textureLocation >= 0 && lengthLocation >= 0 && modeLocation >= 0
+    }
+
+    fun render(
+        inputTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        length: Float,
+        mode: Int,
+    ) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
+        quad.use(0f, 0f, 1f, 1f)
+        GLES20.glUniform1i(textureLocation, 0)
+        GLES20.glUniform1f(lengthLocation, length)
+        GLES20.glUniform1i(modeLocation, mode)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+    }
+
+    fun release() = quad.release()
+
+    companion object {
+        private const val FRAGMENT_SHADER = """
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            uniform float uLength;
+            uniform int uMode;
+            void main() {
+                vec2 centered = vUv - 0.5;
+                if (uMode == 2) {
+                    vec2 dir = centered * uLength * 4.0;
+                    float r = texture2D(uTexture, vUv + dir).r;
+                    float g = texture2D(uTexture, vUv).g;
+                    float b = texture2D(uTexture, vUv - dir).b;
+                    gl_FragColor = vec4(r, g, b, 1.0);
+                } else if (uMode == 1) {
+                    vec3 sum = vec3(0.0);
+                    for (int i = -4; i <= 4; i++) {
+                        sum += texture2D(uTexture, vUv + vec2(float(i) * uLength * 0.25, 0.0)).rgb;
+                    }
+                    gl_FragColor = vec4(sum / 9.0, 1.0);
+                } else {
+                    vec3 sum = vec3(0.0);
+                    for (int i = 0; i < 8; i++) {
+                        float t = float(i) / 8.0;
+                        sum += texture2D(uTexture, mix(vUv, vec2(0.5), t * uLength * 4.0)).rgb;
+                    }
+                    gl_FragColor = vec4(sum / 8.0, 1.0);
+                }
+            }
+        """
+    }
+}

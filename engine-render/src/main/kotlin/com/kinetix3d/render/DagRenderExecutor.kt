@@ -30,6 +30,7 @@ class DagRenderExecutor(
     private val vectorify = VectorifyKernel()
     private val keyer = KeyerKernel()
     private val oscillate = OscillateKernel()
+    private val optics = OpticsKernel()
     private val composite = CompositeKernel()
 
     fun initialize(): Boolean =
@@ -46,6 +47,7 @@ class DagRenderExecutor(
             vectorify.initialize() &&
             keyer.initialize() &&
             oscillate.initialize() &&
+            optics.initialize() &&
             composite.initialize()
 
     fun render(
@@ -347,6 +349,23 @@ class DagRenderExecutor(
                         checkGl("oscillate")
                     }
 
+                    "kinetix.optics" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        optics.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            length = param(graph, pass.nodeId, "length", 0.06f),
+                            mode = modeIndex(pass.modeId, "god_rays", "anamorphic", "chromatic_aberration"),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("optics")
+                    }
+
                     "kinetix.composite" -> {
                         val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         val overlay = overlaySource
@@ -462,6 +481,7 @@ class DagRenderExecutor(
         vectorify.release()
         keyer.release()
         oscillate.release()
+        optics.release()
         composite.release()
         overlaySource?.release()
         source.release()
