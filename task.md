@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Audio waveforms on timeline audio clips.
-- Verify the waveform rendering.
+- Export cancellation from the progress notification.
+- Verify cancel stops the render and cleans up.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -73,10 +73,12 @@ Updated: 2026-11-19
 - Composite export is built and lint-clean; phone verification is pending on a stable display.
 - Audio waveforms: `WaveformGenerator` decodes the audio track to 256 peak buckets; the timeline draws white waveform bars inside audio clips.
 - Waveforms are built and lint-clean; phone verification is pending on a stable display.
+- Export cancellation: `HardwareExportSession` checks `isCancelled` per frame; the service handles the notification Cancel action, sets `ExportState.Cancelled`, and stops.
+- Cancellation is built and lint-clean; phone verification is pending on a stable display.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, waveforms, the V2 composite, slip/slide and composite export on a stable display.
+- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export and cancel on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

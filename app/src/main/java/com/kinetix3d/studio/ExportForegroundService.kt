@@ -8,6 +8,7 @@ package com.kinetix3d.studio
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -36,10 +37,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.CancellationException
 
 class ExportForegroundService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
+
+    @Volatile
+    private var cancelRequested = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -48,6 +53,14 @@ class ExportForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
+        if (intent?.action == ACTION_CANCEL) {
+            cancelRequested = true
+            job?.cancel()
+            mutableState.value = ExportState.Cancelled
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val request = intent?.toExportRequest()
         if (request == null) {
             stopSelf()
@@ -56,6 +69,7 @@ class ExportForegroundService : Service() {
         createChannel()
         startForeground(NOTIFICATION_ID, notification(0f, "Preparing export…"))
         mutableState.value = ExportState.Running(0f)
+        cancelRequested = false
         job?.cancel()
         job =
             scope.launch {
@@ -80,10 +94,13 @@ class ExportForegroundService : Service() {
                             startUs = request.startUs,
                             overlayPath = request.overlayPath,
                             overlayPtsOffsetUs = request.overlayPtsOffsetUs,
-                        ).export { progress ->
-                            mutableState.value = ExportState.Running(progress)
-                            updateNotification(progress)
-                        }
+                        ).export(
+                            onProgress = { progress ->
+                                mutableState.value = ExportState.Running(progress)
+                                updateNotification(progress)
+                            },
+                            isCancelled = { cancelRequested },
+                        )
                     val api = PlatformApiProvider.create(this@ExportForegroundService, profile)
                     val uri =
                         api.storageAndExport.publishExportAtomically(
@@ -95,8 +112,12 @@ class ExportForegroundService : Service() {
                     mutableState.value = ExportState.Success(uri.toString(), result.frames)
                     updateNotification(1f, "Export complete")
                 } catch (throwable: Throwable) {
-                    mutableState.value = ExportState.Failure(throwable.message ?: "Export failed")
-                    updateNotification(0f, "Export failed")
+                    if (throwable is CancellationException || cancelRequested) {
+                        mutableState.value = ExportState.Cancelled
+                    } else {
+                        mutableState.value = ExportState.Failure(throwable.message ?: "Export failed")
+                        updateNotification(0f, "Export failed")
+                    }
                 } finally {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -137,7 +158,18 @@ class ExportForegroundService : Service() {
         .setContentText(text)
         .setProgress(100, (progress * 100f).toInt(), false)
         .setOngoing(true)
+        .addAction(0, "Cancel", cancelPendingIntent())
         .build()
+
+    private fun cancelPendingIntent(): PendingIntent {
+        val intent = Intent(this, ExportForegroundService::class.java).setAction(ACTION_CANCEL)
+        return PendingIntent.getService(
+            this,
+            1,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
 
     private fun updateNotification(
         progress: Float,
@@ -150,6 +182,7 @@ class ExportForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "kinetix-export"
         private const val NOTIFICATION_ID = 4101
+        private const val ACTION_CANCEL = "com.kinetix3d.studio.action.CANCEL_EXPORT"
         private const val EXTRA_SOURCE = "source"
         private const val EXTRA_START_US = "startUs"
         private const val EXTRA_DURATION_US = "durationUs"

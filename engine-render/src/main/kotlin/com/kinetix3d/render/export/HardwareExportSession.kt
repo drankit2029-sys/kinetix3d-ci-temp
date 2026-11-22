@@ -23,6 +23,7 @@ import com.kinetix3d.render.SynchronousVideoSource
 import com.kinetix3d.render.plan.DagRenderPlanner
 import com.kinetix3d.render.plan.FboBudget
 import java.io.File
+import java.util.concurrent.CancellationException
 
 data class ExportResult(
     val file: File,
@@ -44,7 +45,10 @@ class HardwareExportSession(
     private val mimeType: String = MediaFormat.MIMETYPE_VIDEO_AVC,
     private val bitRate: Int = DEFAULT_BIT_RATE,
 ) {
-    fun export(onProgress: (Float) -> Unit = {}): ExportResult {
+    fun export(
+        onProgress: (Float) -> Unit = {},
+        isCancelled: () -> Boolean = { false },
+    ): ExportResult {
         val width = comp.width
         val height = comp.height
         val fps = comp.fps
@@ -101,6 +105,7 @@ class HardwareExportSession(
             val muxerState = MuxerState()
             val info = MediaCodec.BufferInfo()
             for (frameIndex in 0 until frameCount) {
+                if (isCancelled()) throw CancellationException("Export cancelled")
                 val ptsUs = startUs + (frameIndex * 1_000_000.0 / fps).toLong()
                 videoSource.update(ptsUs)
                 check(

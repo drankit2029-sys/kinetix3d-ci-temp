@@ -203,6 +203,7 @@ fun KinetixStudioApp(
             is ExportState.Running -> "exporting…"
             is ExportState.Success -> "exported ${state.frames} frames → ${state.uri}"
             is ExportState.Failure -> "export failed: ${state.message}"
+            ExportState.Cancelled -> "export cancelled"
         }
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }

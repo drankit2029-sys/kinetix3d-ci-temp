@@ -33,4 +33,6 @@ sealed interface ExportState {
     data class Failure(
         val message: String,
     ) : ExportState
+
+    data object Cancelled : ExportState
 }
