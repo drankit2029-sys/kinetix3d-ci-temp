@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- MVP week 2: UI refinement + stability.
-- Then the emulator device matrix and GPU/codec hardening.
+- GPU/codec hardening on the VM emulator matrix.
+- Then the remaining MVP UI polish and physical-device sign-off.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -112,6 +112,7 @@ Updated: 2026-11-19
 - Export polish: Cancel button + `ExportForegroundService.cancel`, ranged export duration fixed (`rangeEnd - rangeStart`), export uses the active/overlay asset paths, and the status moved to its own ellipsized line.
 - Compact header: Kinetix3D + project name row, 16dp content padding, single-line preview/status/source labels, and timeline clip labels constrained to the clip width.
 - Portrait-only MVP: `MainActivity` is `screenOrientation="portrait"` and handles orientation/screenSize config changes, so the editor state survives rotation. The emulator's landscape layout was broken (content clipped/zoomed), so landscape is deferred to v1.0; the phone-first editor is portrait-first.
+- Timeline height: 220dp on screens shorter than 800dp (e.g. Pixel 2 at 731dp), 300dp otherwise, so the timeline fits short phones better.
 
 ## MVP plan (target 2-4 weeks)
 
@@ -149,6 +150,28 @@ Updated: 2026-11-19
 - MVP week 3: lifecycle/stability tests, emulator device matrix.
 - Risk hardening: GPU fallbacks, codec matrix, thermal/storage, physical-device sign-off.
 - After the hardened MVP: Phase 4 (OmniTrackpad/curve editor), Phase 5 (plugin SDK/operator parity), Phase 6 (3D stage/HDR), Phase 7 (AI suite).
+
+## Device matrix (VM emulators, 2026-11-22)
+
+- API 26 (Pixel 2, 2 GB): launches, **R11F_G11F_B10F** fallback, no app crash.
+- API 28 (Pixel 2, 2 GB): launches, **R11F_G11F_B10F**, no app crash.
+- API 30 (Pixel 2, 2 GB): launches, **R11F_G11F_B10F**, no app crash.
+- API 33 (Pixel 2, 2 GB): launches, **RGBA16F**, notification permission, no app crash.
+- API 35 (Pixel 2, 2 GB): launches, **RGBA16F**, notification permission, no app crash.
+- API 36 (Pixel 6, 4 GB): launches, **RGBA16F**, full UI verified.
+- API 37: the emulator's system UI/launcher crash with `Failed to initialize display event receiver status=-32` under both SwiftShader and `-gpu off`; the app is not testable on this emulator. Needs a physical device or a newer emulator build.
+- AVDs: `k3d-api26/28/30/33/35/36`; `api36` belongs to the Teleprompter agent, `k3d-api36` is Kinetix3D's.
+
+## Codec matrix (VM emulator, API 36)
+
+- H.264 4K (3840x2160, 62 Mbps): imports and decodes at ~20 fps, RGBA16F, no crash.
+- HEVC 1080p: imports and decodes at ~14 fps, no crash.
+- AV1 1080p: imports and decodes at ~10 fps, no crash.
+- Portrait H.264 screen recording: imports and plays.
+- Export from the AV1 1080p source: **180 frames**, H.264 1080p, published to `Movies/Kinetix3D/kinetix-export-…mp4`, no crash.
+- Software GL (`-gpu off`): the app renders the AV1 source at 52 fps, RGBA16F, no crash.
+- 16KB page size: the Rust `.so` LOAD segments are aligned `0x4000`; `zipalign -c -P 16` passes.
+- The emulator's software decoders (`c2.android.avc.decoder`, `c2.android.hevc.decoder`, `c2.android.av1-dav1d.decoder`) all initialize cleanly.
 
 ## Testing notes
 - Phone: USB `RZCY61Z8TPD`; WiFi `10.49.246.235:5555`; hotspot fallback if USB drops.

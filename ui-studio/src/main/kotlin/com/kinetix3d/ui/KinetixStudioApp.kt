@@ -243,7 +243,7 @@ fun KinetixStudioApp(
         }
     val context = LocalContext.current
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val timelineHeight = if (screenHeightDp < 600) 220.dp else 300.dp
+    val timelineHeight = if (screenHeightDp < 800) 220.dp else 300.dp
     val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }
     var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
     val scope = rememberCoroutineScope()
