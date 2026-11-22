@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -208,6 +209,7 @@ fun TimelinePanel(
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val scrollState = rememberScrollState()
     val currentPlayhead by rememberUpdatedState(playheadUs)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
@@ -275,6 +277,15 @@ fun TimelinePanel(
             }
             TextButton(onClick = { pxPerSecond = (pxPerSecond + 16f).coerceAtMost(160f) }) {
                 Text("+", color = TimelineText)
+            }
+            TextButton(
+                onClick = {
+                    val availableDp = (screenWidthDp - 76 - 16).coerceAtLeast(120)
+                    pxPerSecond =
+                        (availableDp / (durationUs / 1_000_000f)).coerceIn(32f, 160f)
+                },
+            ) {
+                Text("Fit", color = TimelineText)
             }
         }
         if (selectedClip != null) {
