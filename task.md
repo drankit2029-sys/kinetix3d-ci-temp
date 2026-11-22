@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Slip trim: shift the source range without moving the clip.
-- Phone-verify the slip frame change.
+- Slide trim: move a clip while adjusting adjacent clips to keep track duration.
+- Verify slide and commit.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -65,10 +65,12 @@ Updated: 2026-11-19
 - Phone-verified: moving Winter Olympics by +0.5s moved the linked A2 audio too; restart kept both.
 - Slip trim: `ProjectEditor.slipClip` shifts `sourceInUs`/`sourceOutUs` without moving the timeline range; Slip −/+ buttons and `,`/`.` shortcuts; JVM tests cover the shift, zero clamp and missing clips.
 - Slip UI verified on device; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
+- Slide trim: `ProjectEditor.slideClip` moves a clip and adjusts the previous out/next in points so track duration is unchanged; Slide −/+ buttons and `;`/`'` shortcuts; JVM tests cover right/left slides and missing clips.
+- Slip + slide are unit-tested; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify the V2 composite and slip frame change on a stable virtual display.
+- Re-verify the V2 composite, slip and slide on a stable virtual display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

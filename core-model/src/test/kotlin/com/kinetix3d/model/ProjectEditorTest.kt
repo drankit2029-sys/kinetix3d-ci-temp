@@ -298,6 +298,51 @@ class ProjectEditorTest {
         assertEquals(2_500_000L, clip.sourceOutUs)
     }
 
+    private fun threeAdjacentClips(): ProjectState {
+        val base = state()
+        val composition = base.activeComposition()
+        val second = ClipNode("clip-2", "V1", 2_000_000L, 4_000_000L)
+        val third = ClipNode("clip-3", "V1", 4_000_000L, 6_000_000L)
+        return base.copy(
+            compositions =
+                base.compositions.putting(
+                    composition.compositionId,
+                    composition.copy(
+                        clips =
+                            composition.clips
+                                .putting(second.clipId, second)
+                                .putting(third.clipId, third),
+                    ),
+                ),
+        )
+    }
+
+    @Test
+    fun slideClipRightExtendsPreviousAndShortensNext() {
+        val result = ProjectEditor.slideClip(threeAdjacentClips(), "clip-2", 500_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(2_500_000L, clips.getValue("clip-2").timelineInUs)
+        assertEquals(4_500_000L, clips.getValue("clip-2").timelineOutUs)
+        assertEquals(2_500_000L, clips.getValue("clip-1").timelineOutUs)
+        assertEquals(4_500_000L, clips.getValue("clip-3").timelineInUs)
+    }
+
+    @Test
+    fun slideClipLeftShortensPreviousAndExtendsNext() {
+        val result = ProjectEditor.slideClip(threeAdjacentClips(), "clip-2", -500_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(1_500_000L, clips.getValue("clip-2").timelineInUs)
+        assertEquals(3_500_000L, clips.getValue("clip-2").timelineOutUs)
+        assertEquals(1_500_000L, clips.getValue("clip-1").timelineOutUs)
+        assertEquals(3_500_000L, clips.getValue("clip-3").timelineInUs)
+    }
+
+    @Test
+    fun slideMissingClipIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.slideClip(state, "missing", 500_000L))
+    }
+
     @Test
     fun slipClipShiftsTheSourceRange() {
         val result = ProjectEditor.slipClip(state(), "clip-1", 500_000L)

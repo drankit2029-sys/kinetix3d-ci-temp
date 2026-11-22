@@ -450,6 +450,20 @@ fun KinetixStudioApp(
             }
         }
     }
+    val slideClip: (String, Long) -> Unit = { id, delta ->
+        val updated = ProjectEditor.slideClip(demoState, id, delta)
+        if (updated != demoState) {
+            applyEdit(updated)
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "slid" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
     val detachAudio: (String) -> Unit = { id ->
         val updated = ProjectEditor.detachAudio(demoState, id)
         if (updated != demoState) {
@@ -606,6 +620,16 @@ fun KinetixStudioApp(
 
                                 Key.Period -> {
                                     selectedClipId?.let { slipClip(it, KEY_SEEK_STEP_US) }
+                                    true
+                                }
+
+                                Key.Semicolon -> {
+                                    selectedClipId?.let { slideClip(it, -KEY_SEEK_STEP_US) }
+                                    true
+                                }
+
+                                Key.Apostrophe -> {
+                                    selectedClipId?.let { slideClip(it, KEY_SEEK_STEP_US) }
                                     true
                                 }
 
@@ -843,6 +867,7 @@ fun KinetixStudioApp(
                     },
                     onRippleTrimClip = { id, _ -> rippleTrim(id) },
                     onSlipClip = slipClip,
+                    onSlideClip = slideClip,
                     onSplitClip = splitClip,
                     onDeleteClip = deleteClip,
                     onDetachAudio = detachAudio,

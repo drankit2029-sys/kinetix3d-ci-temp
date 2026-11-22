@@ -190,6 +190,57 @@ object ProjectEditor {
         )
     }
 
+    /**
+     * Slides a clip by [deltaUs], extending the previous clip's out point and
+     * shortening the next clip's in point so the track duration is unchanged.
+     */
+    fun slideClip(
+        state: ProjectState,
+        clipId: String,
+        deltaUs: Long,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val clip = composition.clips[clipId] ?: return state
+        if (deltaUs == 0L) return state
+        val trackClips =
+            composition.clips.values
+                .filter { it.trackId == clip.trackId }
+                .sortedBy { it.timelineInUs }
+        val index = trackClips.indexOfFirst { it.clipId == clipId }
+        if (index < 0) return state
+        val previous = trackClips.getOrNull(index - 1)
+        val next = trackClips.getOrNull(index + 1)
+        val newStart = (clip.timelineInUs + deltaUs).coerceAtLeast(0L)
+        val actualDelta = newStart - clip.timelineInUs
+        if (actualDelta == 0L) return state
+        var updated = composition.clips
+        updated =
+            updated.putting(
+                clipId,
+                clip.copy(
+                    timelineInUs = newStart,
+                    timelineOutUs = newStart + clip.durationUs,
+                ),
+            )
+        if (previous != null) {
+            val previousOut =
+                (previous.timelineOutUs + actualDelta)
+                    .coerceAtLeast(previous.timelineInUs + MIN_CLIP_DURATION_US)
+            updated = updated.putting(previous.clipId, previous.copy(timelineOutUs = previousOut))
+        }
+        if (next != null) {
+            val nextIn =
+                (next.timelineInUs + actualDelta)
+                    .coerceAtMost(next.timelineOutUs - MIN_CLIP_DURATION_US)
+                    .coerceAtLeast(0L)
+            updated = updated.putting(next.clipId, next.copy(timelineInUs = nextIn))
+        }
+        val updatedComposition = composition.copy(clips = updated)
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     /** Moves a clip to [newStartUs], preserving its duration and source range. */
     fun moveClip(
         state: ProjectState,
