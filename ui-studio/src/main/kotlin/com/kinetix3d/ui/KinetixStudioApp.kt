@@ -200,6 +200,7 @@ fun KinetixStudioApp(
     var showSettings by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var showMedia by remember { mutableStateOf(false) }
+    var showMarkers by remember { mutableStateOf(false) }
     var exportBitRate by remember { mutableIntStateOf(12_000_000) }
     var exportWidth by remember { mutableIntStateOf(1920) }
     var exportHeight by remember { mutableIntStateOf(1080) }
@@ -398,6 +399,20 @@ fun KinetixStudioApp(
                 scope.launch {
                     runCatching { store.recordSnapshot(updated) }
                         .onSuccess { persistenceStatus = "marker added" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
+    val removeMarker: (String) -> Unit = { markerId ->
+        val updated = ProjectEditor.removeMarker(demoState, markerId)
+        if (updated != demoState) {
+            applyEdit(updated)
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "marker removed" }
                         .onFailure { persistenceStatus = "save failed" }
                 }
             }
@@ -1042,6 +1057,9 @@ fun KinetixStudioApp(
                     TextButton(onClick = addMarker) {
                         Text("Add Marker")
                     }
+                    TextButton(onClick = { showMarkers = true }) {
+                        Text("Markers")
+                    }
                     TextButton(onClick = { showMedia = true }) {
                         Text("Media")
                     }
@@ -1112,6 +1130,41 @@ fun KinetixStudioApp(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+        }
+        if (showMarkers) {
+            AlertDialog(
+                onDismissRequest = { showMarkers = false },
+                title = { Text("Markers") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (demoState.markers.isEmpty()) {
+                            Text(
+                                "No markers yet. Use Add Marker at the playhead.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        demoState.markers.forEach { marker ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${formatSeconds(marker.ptsUs)} ${marker.label}".trim(),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = { removeMarker(marker.markerId) }) {
+                                    Text("Delete")
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showMarkers = false }) {
+                        Text("Close")
+                    }
+                },
+            )
         }
         if (showMedia) {
             AlertDialog(
