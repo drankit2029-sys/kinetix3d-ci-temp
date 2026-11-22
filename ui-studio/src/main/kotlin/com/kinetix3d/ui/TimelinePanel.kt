@@ -204,6 +204,7 @@ fun TimelinePanel(
     onMoveClip: (String, Long) -> Unit = { _, _ -> },
     onMoveClipEnd: (String, Long) -> Unit = { _, _ -> },
     thumbnails: Map<String, ImageBitmap> = emptyMap(),
+    waveforms: Map<String, FloatArray> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
@@ -426,6 +427,7 @@ fun TimelinePanel(
                     onMoveClip = onMoveClip,
                     onMoveClipEnd = onMoveClipEnd,
                     thumbnails = thumbnails,
+                    waveforms = waveforms,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
                     rulerHeight = rulerHeight,
@@ -450,6 +452,7 @@ private fun TimelineCanvas(
     onMoveClip: (String, Long) -> Unit,
     onMoveClipEnd: (String, Long) -> Unit,
     thumbnails: Map<String, ImageBitmap>,
+    waveforms: Map<String, FloatArray>,
     pxPerSecond: Float,
     width: Dp,
     rulerHeight: Dp,
@@ -631,6 +634,22 @@ private fun TimelineCanvas(
                         dstSize = IntSize(thumbWidth.toInt(), clipHeight.toInt()),
                         alpha = 0.55f,
                     )
+                }
+                val wave = waveforms[clip.id]
+                if (wave != null && !clip.isVideo) {
+                    val centerY = (rectTop + rectBottom) / 2f
+                    val maxHeight = (rectBottom - rectTop) * 0.8f
+                    val step = (right - left - 2f) / wave.size
+                    wave.forEachIndexed { index, peak ->
+                        val x = left + 1f + index * step
+                        val half = (peak * maxHeight / 2f).coerceAtLeast(0.5f)
+                        drawLine(
+                            color = Color(0xCCFFFFFF),
+                            start = Offset(x, centerY - half),
+                            end = Offset(x, centerY + half),
+                            strokeWidth = 1.5f,
+                        )
+                    }
                 }
                 if (clip.id == selectedClipId) {
                     drawRoundRect(

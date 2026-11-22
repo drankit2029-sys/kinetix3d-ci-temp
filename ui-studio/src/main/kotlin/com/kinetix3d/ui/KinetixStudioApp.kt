@@ -78,6 +78,7 @@ import com.kinetix3d.media.AudioPlayback
 import com.kinetix3d.media.DecoderPoolManager
 import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.media.ScheduledClip
+import com.kinetix3d.media.WaveformGenerator
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
@@ -182,6 +183,7 @@ fun KinetixStudioApp(
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var renderStats by remember { mutableStateOf(RenderStats()) }
     var thumbnails by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
+    var waveforms by remember { mutableStateOf<Map<String, FloatArray>>(emptyMap()) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var inPointUs by remember { mutableLongStateOf(0L) }
     var outPointUs by remember { mutableLongStateOf(0L) }
@@ -569,17 +571,25 @@ fun KinetixStudioApp(
     LaunchedEffect(timelineProject, activeMediaPath) {
         val path = activeMediaPath ?: return@LaunchedEffect
         val videoClips = timelineProject.tracks.flatMap { it.clips }.filter { it.isVideo }
-        if (videoClips.isEmpty()) {
-            thumbnails = emptyMap()
-            return@LaunchedEffect
-        }
+        val audioClips = timelineProject.tracks.flatMap { it.clips }.filter { !it.isVideo }
         thumbnails =
-            withContext(Dispatchers.IO) {
-                videoClips
-                    .mapNotNull { clip ->
-                        extractThumbnail(path, clip.startUs + clip.durationUs / 2)
-                            ?.let { clip.id to it.asImageBitmap() }
-                    }.toMap()
+            if (videoClips.isEmpty()) {
+                emptyMap()
+            } else {
+                withContext(Dispatchers.IO) {
+                    videoClips
+                        .mapNotNull { clip ->
+                            extractThumbnail(path, clip.startUs + clip.durationUs / 2)
+                                ?.let { clip.id to it.asImageBitmap() }
+                        }.toMap()
+                }
+            }
+        waveforms =
+            if (audioClips.isEmpty()) {
+                emptyMap()
+            } else {
+                val peaks = withContext(Dispatchers.IO) { WaveformGenerator.generate(path, 256) }
+                audioClips.associate { it.id to peaks }
             }
     }
 
@@ -924,6 +934,7 @@ fun KinetixStudioApp(
                         moveBefore = null
                     },
                     thumbnails = thumbnails,
+                    waveforms = waveforms,
                     modifier =
                         Modifier
                             .fillMaxWidth()
