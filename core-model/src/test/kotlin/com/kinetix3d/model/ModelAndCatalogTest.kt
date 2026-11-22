@@ -251,6 +251,15 @@ class DeviceCapabilityProfileTest {
     }
 
     @Test
+    fun `encode capability checks resolution and orientation`() {
+        val profile = DeviceCapabilityProfile.tier2Default()
+        assertTrue(profile.supportsEncode(VideoMime.H264, 1920, 1080))
+        assertTrue(profile.supportsEncode(VideoMime.H264, 1080, 1920))
+        assertEquals(false, profile.supportsEncode(VideoMime.H264, 3840, 2160))
+        assertEquals(false, profile.supportsEncode(VideoMime.AV1, 1920, 1080))
+    }
+
+    @Test
     fun `tier2 fallback is marked approximate and conservative`() {
         val fallback = DeviceCapabilityProfile.tier2Default()
         assertTrue(fallback.approximate)

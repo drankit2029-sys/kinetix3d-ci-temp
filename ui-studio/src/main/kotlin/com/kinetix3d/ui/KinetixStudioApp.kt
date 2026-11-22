@@ -97,6 +97,7 @@ import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.model.MediaAssetDescriptor
 import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.model.ProjectState
+import com.kinetix3d.model.VideoMime
 import com.kinetix3d.model.displayName
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
@@ -227,6 +228,14 @@ fun KinetixStudioApp(
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exporting = exportState is ExportState.Running
+    val canExport4k = deviceProfile?.supportsEncode(VideoMime.H264, 3840, 2160) ?: true
+    LaunchedEffect(deviceProfile) {
+        val profile = deviceProfile ?: return@LaunchedEffect
+        if (exportWidth >= 3840 && !profile.supportsEncode(VideoMime.H264, 3840, 2160)) {
+            exportWidth = 1920
+            exportHeight = 1080
+        }
+    }
     val exportProgress =
         when (val state = exportState) {
             is ExportState.Running -> state.progress
@@ -1742,12 +1751,14 @@ fun KinetixStudioApp(
                             fontSize = 11.sp,
                         )
                         listOf(1920 to 1080, 3840 to 2160).forEach { (width, height) ->
+                            val supported = width < 3840 || canExport4k
                             Row(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .selectable(
                                             selected = exportWidth == width && exportHeight == height,
+                                            enabled = supported,
                                             onClick = {
                                                 exportWidth = width
                                                 exportHeight = height
@@ -1759,9 +1770,25 @@ fun KinetixStudioApp(
                                 RadioButton(
                                     selected = exportWidth == width && exportHeight == height,
                                     onClick = null,
+                                    enabled = supported,
                                 )
-                                Text("$width×$height")
+                                Text(
+                                    "$width×$height",
+                                    color =
+                                        if (supported) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                )
                             }
+                        }
+                        if (!canExport4k) {
+                            Text(
+                                "4K encoding is not supported on this device; 1080p is selected.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            )
                         }
                         Text(
                             "Export bitrate",

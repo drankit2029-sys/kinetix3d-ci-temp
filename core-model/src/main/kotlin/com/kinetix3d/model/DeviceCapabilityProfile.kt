@@ -100,6 +100,20 @@ data class DeviceCapabilityProfile(
     val supportsCompute: Boolean
         get() = glesMajor > 3 || (glesMajor == 3 && glesMinor >= 1)
 
+    /** True when [mime] can encode at least [width]×[height] (orientation-agnostic). */
+    fun supportsEncode(
+        mime: VideoMime,
+        width: Int,
+        height: Int,
+    ): Boolean {
+        val max = encodeMatrix[mime] ?: return false
+        val shortSide = minOf(width, height)
+        val longSide = maxOf(width, height)
+        val maxShort = minOf(max.width, max.height)
+        val maxLong = maxOf(max.width, max.height)
+        return shortSide <= maxShort && longSide <= maxLong
+    }
+
     companion object {
         /** Conservative fallback persisted when any probe stage fails (never fail first boot). */
         fun tier2Default(approximate: Boolean = true): DeviceCapabilityProfile =
