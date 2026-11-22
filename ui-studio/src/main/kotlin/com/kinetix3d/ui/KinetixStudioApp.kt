@@ -262,6 +262,10 @@ fun KinetixStudioApp(
         remember(demoState.mediaPool) {
             demoState.mediaPool.values.associate { it.assetId to it.displayName() }
         }
+    val assetPaths =
+        remember(demoState.mediaPool) {
+            demoState.mediaPool.values.associate { it.assetId to it.uri }
+        }
     val timelineProject =
         remember(demoState, mediaNames) {
             demoState.activeComposition().toTimelineProjectUi(mediaNames)
@@ -278,7 +282,7 @@ fun KinetixStudioApp(
     val settings = demoState.settings
     val previewScale = if (settings.height >= 2160) 0.25f else 0.5f
     val scheduledClips =
-        remember(timelineProject, activeMediaPath) {
+        remember(timelineProject, activeMediaPath, assetPaths) {
             timelineProject.tracks
                 .mapIndexedNotNull { index, track ->
                     if (track.type != "VIDEO") {
@@ -290,7 +294,9 @@ fun KinetixStudioApp(
                                 trackId = track.name,
                                 startUs = clip.startUs,
                                 endUs = clip.startUs + clip.durationUs,
-                                sourcePath = activeMediaPath.orEmpty(),
+                                sourcePath =
+                                    clip.assetId?.let { assetPaths[it] }
+                                        ?: activeMediaPath.orEmpty(),
                                 priority = timelineProject.tracks.size - index,
                             )
                         }
@@ -301,11 +307,15 @@ fun KinetixStudioApp(
         remember(scheduledClips, playheadUs) {
             DecoderPoolManager(maxDecoders = 4).activeClip(playheadUs, scheduledClips)
         }
+    val activeSourcePath =
+        activeClip?.sourcePath?.takeIf { it.isNotBlank() } ?: activeMediaPath
     val overlayTrack = timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
     val overlayClip =
         overlayTrack?.clips?.firstOrNull {
             playheadUs >= it.startUs && playheadUs < it.startUs + it.durationUs
         }
+    val overlaySourcePath =
+        overlayClip?.assetId?.let { assetPaths[it] } ?: activeMediaPath
     val overlayPtsUs =
         overlayClip?.let { it.sourceInUs + (playheadUs - it.startUs) } ?: 0L
     val focusRequester = remember { FocusRequester() }
@@ -717,8 +727,8 @@ fun KinetixStudioApp(
         if (!path.isNullOrBlank()) renderView?.setSourcePath(path)
     }
 
-    DisposableEffect(activeMediaPath) {
-        val playback = activeMediaPath?.let { AudioPlayback(it) }
+    DisposableEffect(activeSourcePath) {
+        val playback = activeSourcePath?.let { AudioPlayback(it) }
         playback?.setEq(eqLowDb, eqMidDb, eqHighDb)
         audioPlayback = playback
         onDispose {
@@ -745,10 +755,6 @@ fun KinetixStudioApp(
         audioPlayback?.setVolume(if (muted) 0f else 1f)
     }
 
-    val assetPaths =
-        remember(demoState.mediaPool) {
-            demoState.mediaPool.values.associate { it.assetId to it.uri }
-        }
     LaunchedEffect(timelineProject, activeMediaPath, assetPaths) {
         val videoClips = timelineProject.tracks.flatMap { it.clips }.filter { it.isVideo }
         val audioClips = timelineProject.tracks.flatMap { it.clips }.filter { !it.isVideo }
@@ -927,7 +933,7 @@ fun KinetixStudioApp(
                             KinetixRenderView(context).also { view ->
                                 view.onStats = { stats -> renderStats = stats }
                                 renderView = view
-                                view.setSourcePath(activeMediaPath)
+                                view.setSourcePath(activeSourcePath)
                             }
                         },
                         update = { view ->
@@ -936,10 +942,10 @@ fun KinetixStudioApp(
                             view.setPreviewScale(previewScale)
                             view.setPlaying(isPlaying)
                             view.setPlayheadUs(playheadUs)
-                            view.setSourcePath(activeMediaPath)
+                            view.setSourcePath(activeSourcePath)
                             view.setOverlaySourcePath(
                                 if (selectedEffects == listOf("composite") && overlayClip != null) {
-                                    activeMediaPath
+                                    overlaySourcePath
                                 } else {
                                     null
                                 },
