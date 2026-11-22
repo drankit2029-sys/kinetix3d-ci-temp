@@ -204,6 +204,7 @@ fun KinetixStudioApp(
     var showProjects by remember { mutableStateOf(false) }
     var showMedia by remember { mutableStateOf(false) }
     var showMarkers by remember { mutableStateOf(false) }
+    var showShortcuts by remember { mutableStateOf(false) }
     var exportBitRate by remember { mutableIntStateOf(12_000_000) }
     var exportWidth by remember { mutableIntStateOf(1920) }
     var exportHeight by remember { mutableIntStateOf(1080) }
@@ -1107,6 +1108,9 @@ fun KinetixStudioApp(
                     TextButton(onClick = { showMarkers = true }) {
                         Text("Markers")
                     }
+                    TextButton(onClick = { showShortcuts = true }) {
+                        Text("Keys")
+                    }
                     TextButton(onClick = { showMedia = true }) {
                         Text("Media")
                     }
@@ -1177,6 +1181,38 @@ fun KinetixStudioApp(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+        }
+        if (showShortcuts) {
+            AlertDialog(
+                onDismissRequest = { showShortcuts = false },
+                title = { Text("Keyboard shortcuts") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "Space — play / pause",
+                            "Home / ← / → — seek 0.5s",
+                            "C — cycle selected clip",
+                            "S — split selected clip",
+                            "Shift+S — split all tracks",
+                            "Del / Backspace — delete clip",
+                            "R — ripple trim out 0.5s",
+                            "D — detach audio",
+                            ", / . — slip source −/+0.5s",
+                            "; / ' — slide clip −/+0.5s",
+                            "Shift+← / → — move clip 0.5s",
+                            "I / O — set in / out point",
+                            "Ctrl+Z / Ctrl+Shift+Z — undo / redo",
+                        ).forEach { line ->
+                            Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showShortcuts = false }) {
+                        Text("Close")
+                    }
+                },
+            )
         }
         if (showMarkers) {
             AlertDialog(

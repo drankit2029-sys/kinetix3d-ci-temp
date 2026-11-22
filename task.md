@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Tappable timeline markers (12dp ruler hit target).
-- Verify marker seek.
+- Keyboard shortcuts help dialog.
+- Verify the shortcut list matches the handlers.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -96,6 +96,7 @@ Updated: 2026-11-19
 - Media pool asset deletion: the Media dialog has a Delete action that removes the asset from `mediaPool` and persists the snapshot.
 - Per-asset thumbnails/waveforms: `TimelineClipUi.assetId` maps clips to media-pool URIs; thumbnails and waveforms are generated per asset (cached per path) and fall back to the active source.
 - Tappable markers: `hitTestMarker` gives ruler ticks a 12dp coarse hit target; tapping a marker seeks to it. JVM test covers hit/miss/ruler bounds.
+- Keys dialog documents the keyboard transport/editing shortcuts (Space, arrows, C/S/Shift+S, Del, R, D, comma/period, semicolon/apostrophe, I/O, Ctrl+Z).
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
