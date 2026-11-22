@@ -440,6 +440,7 @@ class DagRenderExecutor(
                                 opacity = param(graph, pass.nodeId, "opacity", 1f),
                                 overlayExternal = overlay.isExternal,
                                 overlayMatrix = overlay.textureMatrix(),
+                                blendMode = param(graph, pass.nodeId, "blendMode", 0f).toInt(),
                             )
                         }
                         currentHandle?.let { pool.release(it) }

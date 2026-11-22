@@ -810,10 +810,12 @@ class CompositeKernel {
     private var overlay2d = -1
     private var opacity2d = -1
     private var matrix2d = -1
+    private var blendMode2d = -1
     private var baseExt = -1
     private var overlayExt = -1
     private var opacityExt = -1
     private var matrixExt = -1
+    private var blendModeExt = -1
 
     fun initialize(): Boolean {
         if (!quad2d.create(FRAGMENT_SHADER_2D)) return false
@@ -822,10 +824,12 @@ class CompositeKernel {
         overlay2d = GLES20.glGetUniformLocation(quad2d.programId, "uOverlay")
         opacity2d = GLES20.glGetUniformLocation(quad2d.programId, "uOpacity")
         matrix2d = GLES20.glGetUniformLocation(quad2d.programId, "uOverlayMatrix")
+        blendMode2d = GLES20.glGetUniformLocation(quad2d.programId, "uBlendMode")
         baseExt = GLES20.glGetUniformLocation(quadExternal.programId, "uBase")
         overlayExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOverlay")
         opacityExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOpacity")
         matrixExt = GLES20.glGetUniformLocation(quadExternal.programId, "uOverlayMatrix")
+        blendModeExt = GLES20.glGetUniformLocation(quadExternal.programId, "uBlendMode")
         return base2d >= 0 && overlay2d >= 0 && baseExt >= 0 && overlayExt >= 0
     }
 
@@ -838,12 +842,14 @@ class CompositeKernel {
         opacity: Float,
         overlayExternal: Boolean,
         overlayMatrix: FloatArray?,
+        blendMode: Int = 0,
     ) {
         val quad = if (overlayExternal) quadExternal else quad2d
         val baseLoc = if (overlayExternal) baseExt else base2d
         val overlayLoc = if (overlayExternal) overlayExt else overlay2d
         val opacityLoc = if (overlayExternal) opacityExt else opacity2d
         val matrixLoc = if (overlayExternal) matrixExt else matrix2d
+        val blendLoc = if (overlayExternal) blendModeExt else blendMode2d
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
         GLES20.glViewport(0, 0, width, height)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -858,6 +864,7 @@ class CompositeKernel {
         GLES20.glUniform1i(overlayLoc, 1)
         GLES20.glUniform1f(opacityLoc, opacity)
         GLES20.glUniformMatrix4fv(matrixLoc, 1, false, overlayMatrix ?: IDENTITY, 0)
+        GLES20.glUniform1i(blendLoc, blendMode)
         quad.draw()
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
@@ -902,11 +909,19 @@ class CompositeKernel {
             uniform sampler2D uOverlay;
             uniform float uOpacity;
             uniform mat4 uOverlayMatrix;
+            uniform int uBlendMode;
+            vec3 blend(vec3 base, vec3 overlay) {
+                if (uBlendMode == 1) return 1.0 - (1.0 - base) * (1.0 - overlay);
+                if (uBlendMode == 2) return base * overlay;
+                if (uBlendMode == 3) return min(base + overlay, vec3(1.0));
+                return overlay;
+            }
             void main() {
                 vec4 base = texture2D(uBase, vUv);
                 vec2 uv = (uOverlayMatrix * vec4(vUv, 0.0, 1.0)).xy;
                 vec4 overlay = texture2D(uOverlay, uv);
-                gl_FragColor = vec4(mix(base.rgb, overlay.rgb, overlay.a * uOpacity), 1.0);
+                vec3 blended = blend(base.rgb, overlay.rgb);
+                gl_FragColor = vec4(mix(base.rgb, blended, overlay.a * uOpacity), 1.0);
             }
         """
 
@@ -918,11 +933,19 @@ class CompositeKernel {
             uniform samplerExternalOES uOverlay;
             uniform float uOpacity;
             uniform mat4 uOverlayMatrix;
+            uniform int uBlendMode;
+            vec3 blend(vec3 base, vec3 overlay) {
+                if (uBlendMode == 1) return 1.0 - (1.0 - base) * (1.0 - overlay);
+                if (uBlendMode == 2) return base * overlay;
+                if (uBlendMode == 3) return min(base + overlay, vec3(1.0));
+                return overlay;
+            }
             void main() {
                 vec4 base = texture2D(uBase, vUv);
                 vec2 uv = (uOverlayMatrix * vec4(vUv, 0.0, 1.0)).xy;
                 vec4 overlay = texture2D(uOverlay, uv);
-                gl_FragColor = vec4(mix(base.rgb, overlay.rgb, overlay.a * uOpacity), 1.0);
+                vec3 blended = blend(base.rgb, overlay.rgb);
+                gl_FragColor = vec4(mix(base.rgb, blended, overlay.a * uOpacity), 1.0);
             }
         """
     }

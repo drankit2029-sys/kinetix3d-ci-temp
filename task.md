@@ -3,7 +3,7 @@
 Updated: 2026-11-19
 
 ## Current focus
-- MVP week 1: multi-track compositor + export polish.
+- MVP week 1: composite blend modes + export polish.
 - Then UI refinement, stability, and device-matrix hardening.
 
 ## Done
@@ -108,6 +108,9 @@ Updated: 2026-11-19
 - Bins/tags verified on the VM emulator (`k3d-api36`): imported a real MP4, cycled `default → b-roll`, added `#hero`, and Add-to-timeline created a clip bound to the asset.
 - Human-readable media names: `MediaAssetDescriptor.name` + `displayName()`; the SAF import stores `OpenableColumns.DISPLAY_NAME`; timeline labels and the Media dialog use the name (falling back to the URI file name). Verified on the emulator: the V1 clip now shows `kinetix-import-…mp4` instead of the raw asset ID.
 - Audio master clock: `AudioPlayback.isActive()`; `TimelinePanel` drives the playhead from the AudioTrack position when audio is active and falls back to the wall clock otherwise; the 500ms drift-correction restart loop is gone. Emulator playback verified to 00:04.016 at 55 fps (the emulator runs `-no-audio`, so the audio-driven branch needs a device with audio for final sign-off).
+- Composite blend modes: the composite shader supports Normal/Screen/Multiply/Add via a `uBlendMode` uniform; `demoCompositeGraph(blendMode)` carries the param; the UI shows blend-mode chips when Composite is selected. `DemoGraphTest` covers the graph param.
+- Export polish: Cancel button + `ExportForegroundService.cancel`, ranged export duration fixed (`rangeEnd - rangeStart`), export uses the active/overlay asset paths, and the status moved to its own ellipsized line.
+- Compact header: Kinetix3D + project name row, 16dp content padding, single-line preview/status/source labels, and timeline clip labels constrained to the clip width.
 
 ## MVP plan (target 2-4 weeks)
 

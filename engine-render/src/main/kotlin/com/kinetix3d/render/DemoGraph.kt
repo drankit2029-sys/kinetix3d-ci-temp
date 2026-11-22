@@ -109,7 +109,7 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
 }
 
 /** Base + overlay composite; the overlay source is supplied by RenderThread. */
-fun demoCompositeGraph(): NodeGraph {
+fun demoCompositeGraph(blendMode: Float = 0f): NodeGraph {
     val base = NodeGraph.passthrough()
     val input = base.nodes.getValue(NodeSchemaIds.GROUP_INPUT)
     val output = base.nodes.getValue(NodeSchemaIds.GROUP_OUTPUT)
@@ -127,7 +127,11 @@ fun demoCompositeGraph(): NodeGraph {
                     "base" to NodeInput.FromNode(input.nodeId),
                     "overlay" to NodeInput.FromNode(overlayInput.nodeId),
                 ),
-            params = persistentMapOf("opacity" to ParamChannel.constant(0.5f)),
+            params =
+                persistentMapOf(
+                    "opacity" to ParamChannel.constant(0.5f),
+                    "blendMode" to ParamChannel.constant(blendMode),
+                ),
         )
     return base.copy(
         nodes =

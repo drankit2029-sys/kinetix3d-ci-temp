@@ -129,6 +129,7 @@ private const val EXPORT_DEMO_US = 3_000_000L
 private const val KEY_SEEK_STEP_US = 500_000L
 private const val UNDO_LIMIT = 50
 private val MEDIA_BINS = listOf("default", "b-roll", "music", "titles")
+private val COMPOSITE_BLEND_MODES = listOf("Normal", "Screen", "Multiply", "Add")
 
 private fun formatSeconds(us: Long): String = String.format(Locale.US, "%.1fs", us / 1_000_000.0)
 
@@ -198,6 +199,7 @@ fun KinetixStudioApp(
     var demoState by remember { mutableStateOf(demoProjectState()) }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
     var selectedEffects by remember { mutableStateOf<List<String>>(emptyList()) }
+    var compositeBlendMode by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var renderStats by remember { mutableStateOf(RenderStats()) }
@@ -245,20 +247,42 @@ fun KinetixStudioApp(
     var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
     val scope = rememberCoroutineScope()
     val demoGraph =
-        remember(selectedEffects) {
+        remember(selectedEffects, compositeBlendMode) {
             when {
-                selectedEffects.isEmpty() -> demoClipGraph()
-                selectedEffects == listOf("color") -> demoEffectsGraph()
-                selectedEffects == listOf("composite") -> demoCompositeGraph()
-                else -> demoKernelGraph(selectedEffects)
+                selectedEffects.isEmpty() -> {
+                    demoClipGraph()
+                }
+
+                selectedEffects == listOf("color") -> {
+                    demoEffectsGraph()
+                }
+
+                selectedEffects == listOf("composite") -> {
+                    demoCompositeGraph(compositeBlendMode.toFloat())
+                }
+
+                else -> {
+                    demoKernelGraph(selectedEffects)
+                }
             }
         }
     val effectLabel =
         when {
-            selectedEffects.isEmpty() -> "Clean"
-            selectedEffects == listOf("color") -> "ColorSuite → Blur → Glow"
-            selectedEffects == listOf("composite") -> "Composite 50%"
-            else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
+            selectedEffects.isEmpty() -> {
+                "Clean"
+            }
+
+            selectedEffects == listOf("color") -> {
+                "ColorSuite → Blur → Glow"
+            }
+
+            selectedEffects == listOf("composite") -> {
+                "Composite · ${COMPOSITE_BLEND_MODES[compositeBlendMode]}"
+            }
+
+            else -> {
+                selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
+            }
         }
     val mediaNames =
         remember(demoState.mediaPool) {
@@ -1035,6 +1059,23 @@ fun KinetixStudioApp(
                                 label = { Text(effect.replaceFirstChar { it.uppercase() }) },
                             )
                         }
+                }
+                if (selectedEffects == listOf("composite")) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        COMPOSITE_BLEND_MODES.forEachIndexed { index, name ->
+                            FilterChip(
+                                selected = compositeBlendMode == index,
+                                onClick = { compositeBlendMode = index },
+                                label = { Text(name) },
+                            )
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
