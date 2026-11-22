@@ -192,6 +192,8 @@ fun TimelinePanel(
     onPlayheadChange: (Long) -> Unit,
     isPlaying: Boolean,
     onPlayingChange: (Boolean) -> Unit,
+    muted: Boolean = false,
+    onMutedChange: (Boolean) -> Unit = {},
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
@@ -271,6 +273,9 @@ fun TimelinePanel(
                 modifier = Modifier.height(40.dp),
             ) {
                 Text(if (isPlaying) "Pause" else "Play")
+            }
+            TextButton(onClick = { onMutedChange(!muted) }) {
+                Text(if (muted) "Unmute" else "Mute", color = TimelineText)
             }
             TextButton(onClick = { pxPerSecond = (pxPerSecond - 16f).coerceAtLeast(32f) }) {
                 Text("−", color = TimelineText)

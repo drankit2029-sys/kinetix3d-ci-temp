@@ -196,6 +196,7 @@ fun KinetixStudioApp(
     var outPointUs by remember { mutableLongStateOf(0L) }
     var showSettings by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
+    var muted by remember { mutableStateOf(false) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exporting = exportState is ExportState.Running
@@ -572,9 +573,14 @@ fun KinetixStudioApp(
         val playback = audioPlayback
         if (isPlaying) {
             playback?.start(playheadUs)
+            playback?.setVolume(if (muted) 0f else 1f)
         } else {
             playback?.stop()
         }
+    }
+
+    LaunchedEffect(muted, audioPlayback) {
+        audioPlayback?.setVolume(if (muted) 0f else 1f)
     }
 
     LaunchedEffect(timelineProject, activeMediaPath) {
@@ -911,6 +917,8 @@ fun KinetixStudioApp(
                     onPlayheadChange = { playheadUs = it },
                     isPlaying = isPlaying,
                     onPlayingChange = { isPlaying = it },
+                    muted = muted,
+                    onMutedChange = { muted = it },
                     selectedClipId = selectedClipId,
                     onSelectClip = { selectedClipId = it },
                     onTrimClip = { id, start, end ->

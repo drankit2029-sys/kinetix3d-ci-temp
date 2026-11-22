@@ -36,6 +36,10 @@ class AudioPlayback(
             Thread({ decodeLoop() }, "KinetixAudioDecode").also { it.start() }
     }
 
+    fun setVolume(volume: Float) {
+        runCatching { audioTrack?.setVolume(volume.coerceIn(0f, 1f)) }
+    }
+
     fun stop() {
         running = false
         synchronized(wakeLock) { wakeLock.notifyAll() }
