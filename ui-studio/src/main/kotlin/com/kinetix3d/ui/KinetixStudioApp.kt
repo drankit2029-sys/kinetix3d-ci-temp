@@ -385,6 +385,20 @@ fun KinetixStudioApp(
                 }
             }
         }
+    val addMarker: () -> Unit = {
+        val updated = ProjectEditor.addMarker(demoState, playheadUs)
+        if (updated != demoState) {
+            applyEdit(updated)
+            val store = projectStore
+            if (store != null) {
+                scope.launch {
+                    runCatching { store.recordSnapshot(updated) }
+                        .onSuccess { persistenceStatus = "marker added" }
+                        .onFailure { persistenceStatus = "save failed" }
+                }
+            }
+        }
+    }
     val addOverlay: () -> Unit = {
         val track =
             timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
@@ -1005,6 +1019,7 @@ fun KinetixStudioApp(
                     },
                     thumbnails = thumbnails,
                     waveforms = waveforms,
+                    markers = demoState.markers,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -1016,6 +1031,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = addMarker) {
+                        Text("Add Marker")
+                    }
                     TextButton(onClick = { showMedia = true }) {
                         Text("Media")
                     }

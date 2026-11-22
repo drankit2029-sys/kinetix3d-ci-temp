@@ -61,6 +61,7 @@ import com.kinetix3d.model.CompositionGraph
 import com.kinetix3d.model.PolygonClipPayload
 import com.kinetix3d.model.PreCompClipPayload
 import com.kinetix3d.model.TextClipPayload
+import com.kinetix3d.model.TimelineMarker
 import com.kinetix3d.model.VideoClipPayload
 import com.kinetix3d.render.playback.PlaybackClock
 import java.util.Locale
@@ -208,6 +209,7 @@ fun TimelinePanel(
     onMoveClipEnd: (String, Long) -> Unit = { _, _ -> },
     thumbnails: Map<String, ImageBitmap> = emptyMap(),
     waveforms: Map<String, FloatArray> = emptyMap(),
+    markers: List<TimelineMarker> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
@@ -444,6 +446,7 @@ fun TimelinePanel(
                     onMoveClipEnd = onMoveClipEnd,
                     thumbnails = thumbnails,
                     waveforms = waveforms,
+                    markers = markers,
                     pxPerSecond = pxPerSecond,
                     width = timelineWidth,
                     rulerHeight = rulerHeight,
@@ -469,6 +472,7 @@ private fun TimelineCanvas(
     onMoveClipEnd: (String, Long) -> Unit,
     thumbnails: Map<String, ImageBitmap>,
     waveforms: Map<String, FloatArray>,
+    markers: List<TimelineMarker>,
     pxPerSecond: Float,
     width: Dp,
     rulerHeight: Dp,
@@ -699,6 +703,11 @@ private fun TimelineCanvas(
                 )
                 drawText(layout, topLeft = Offset(left + 6f, rectTop + 4f))
             }
+        }
+        markers.forEach { marker ->
+            val x = (marker.ptsUs.toFloat() / durationUs.toFloat()) * size.width
+            drawLine(Color(0xFFFFB454), Offset(x, 0f), Offset(x, rulerPx), strokeWidth = 2f)
+            drawCircle(Color(0xFFFFB454), radius = 3f, center = Offset(x, 2f))
         }
         if (outPointUs > inPointUs) {
             val inX = (inPointUs.toFloat() / durationUs.toFloat()) * size.width

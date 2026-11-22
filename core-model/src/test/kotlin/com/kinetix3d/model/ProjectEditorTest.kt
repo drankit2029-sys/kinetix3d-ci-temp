@@ -258,6 +258,27 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun addMarkerAppends() {
+        val result = ProjectEditor.addMarker(state(), 1_500_000L, "Beat")
+        assertEquals(1, result.markers.size)
+        assertEquals(1_500_000L, result.markers.first().ptsUs)
+        assertEquals("Beat", result.markers.first().label)
+    }
+
+    @Test
+    fun removeMarkerDeletesIt() {
+        val withMarker = ProjectEditor.addMarker(state(), 1_000_000L)
+        val result = ProjectEditor.removeMarker(withMarker, withMarker.markers.first().markerId)
+        assertTrue(result.markers.isEmpty())
+    }
+
+    @Test
+    fun removeMissingMarkerIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.removeMarker(state, "missing"))
+    }
+
+    @Test
     fun addClipCreatesAVideoClipOnTheTrack() {
         val result =
             ProjectEditor.addClip(

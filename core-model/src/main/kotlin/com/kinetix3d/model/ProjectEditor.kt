@@ -135,6 +135,28 @@ object ProjectEditor {
         )
     }
 
+    fun addMarker(
+        state: ProjectState,
+        ptsUs: Long,
+        label: String = "",
+    ): ProjectState {
+        val marker =
+            TimelineMarker(
+                markerId = "marker-${state.markers.size + 1}-${ptsUs.coerceAtLeast(0L)}",
+                ptsUs = ptsUs.coerceAtLeast(0L),
+                label = label,
+            )
+        return state.copy(markers = state.markers.add(marker))
+    }
+
+    fun removeMarker(
+        state: ProjectState,
+        markerId: String,
+    ): ProjectState {
+        if (state.markers.none { it.markerId == markerId }) return state
+        return state.copy(markers = state.markers.removeAll { it.markerId == markerId })
+    }
+
     /** Adds a video clip to [trackId] at [startUs] with an optional source offset. */
     fun addClip(
         state: ProjectState,

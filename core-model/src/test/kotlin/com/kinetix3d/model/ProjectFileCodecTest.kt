@@ -46,6 +46,20 @@ class ProjectFileCodecTest {
     }
 
     @Test
+    fun roundTripsTimelineMarkers() {
+        val state =
+            sampleState().copy(
+                markers =
+                    persistentListOf(
+                        TimelineMarker("m1", 1_000_000L, "Beat"),
+                        TimelineMarker("m2", 2_500_000L),
+                    ),
+            )
+        val decoded = ProjectFileCodec.decode(ProjectFileCodec.encode(state))
+        assertEquals(state.markers, decoded.markers)
+    }
+
+    @Test
     fun rejectsBadMagic() {
         val bytes = ProjectFileCodec.encode(sampleState())
         bytes[0] = 0

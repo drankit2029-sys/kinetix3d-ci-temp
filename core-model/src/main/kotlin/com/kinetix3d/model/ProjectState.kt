@@ -368,6 +368,13 @@ data class CompositionGraph(
 }
 
 @Serializable
+data class TimelineMarker(
+    val markerId: String,
+    val ptsUs: Long,
+    val label: String = "",
+)
+
+@Serializable
 data class ProjectState(
     val projectId: String,
     val settings: CompSettings,
@@ -376,6 +383,8 @@ data class ProjectState(
     val activeCompId: String,
     @Serializable(with = PersistentMapSerializer::class)
     val mediaPool: PersistentMap<String, MediaAssetDescriptor> = persistentMapOf(),
+    @Serializable(with = PersistentListSerializer::class)
+    val markers: PersistentList<TimelineMarker> = persistentListOf(),
 ) {
     init {
         require(activeCompId in compositions) { "activeCompId '$activeCompId' is not in compositions" }
