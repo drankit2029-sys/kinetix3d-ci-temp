@@ -201,6 +201,8 @@ fun KinetixStudioApp(
     var showProjects by remember { mutableStateOf(false) }
     var showMedia by remember { mutableStateOf(false) }
     var exportBitRate by remember { mutableIntStateOf(12_000_000) }
+    var exportWidth by remember { mutableIntStateOf(1920) }
+    var exportHeight by remember { mutableIntStateOf(1080) }
     var muted by remember { mutableStateOf(false) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
@@ -909,8 +911,8 @@ fun KinetixStudioApp(
                                     sourcePath = path,
                                     startUs = rangeStartUs,
                                     durationUs = rangeEndUs,
-                                    width = 1920,
-                                    height = 1080,
+                                    width = exportWidth,
+                                    height = exportHeight,
                                     fps = settings.fps,
                                     effects = selectedEffects,
                                     overlayPath =
@@ -944,7 +946,8 @@ fun KinetixStudioApp(
                     Text(
                         text =
                             exportStatus
-                                ?: "hardware H.264 · 1080p · ${exportBitRate / 1_000_000} Mbps",
+                                ?: "hardware H.264 · $exportWidth×$exportHeight · " +
+                                "${exportBitRate / 1_000_000} Mbps",
                         color = StudioMuted,
                         fontSize = 11.sp,
                         modifier = Modifier.weight(1f),
@@ -1267,6 +1270,33 @@ fun KinetixStudioApp(
                                     onClick = null,
                                 )
                                 Text("${fps.toInt()} fps")
+                            }
+                        }
+                        Text(
+                            "Export resolution",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        )
+                        listOf(1920 to 1080, 3840 to 2160).forEach { (width, height) ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = exportWidth == width && exportHeight == height,
+                                            onClick = {
+                                                exportWidth = width
+                                                exportHeight = height
+                                            },
+                                            role = Role.RadioButton,
+                                        ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = exportWidth == width && exportHeight == height,
+                                    onClick = null,
+                                )
+                                Text("$width×$height")
                             }
                         }
                         Text(
