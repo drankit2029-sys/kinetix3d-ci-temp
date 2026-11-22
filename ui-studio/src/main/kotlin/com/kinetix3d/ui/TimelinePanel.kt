@@ -51,6 +51,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -772,6 +774,12 @@ private fun TimelineCanvas(
                         textMeasurer.measure(
                             text = clip.label,
                             style = TextStyle(color = Color.White, fontSize = 9.sp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            constraints =
+                                Constraints(
+                                    maxWidth = (right - left - 12f).toInt().coerceAtLeast(1),
+                                ),
                         )
                     drawRect(
                         color = Color(0x99000000),

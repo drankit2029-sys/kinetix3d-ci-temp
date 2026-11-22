@@ -311,6 +311,14 @@ fun KinetixStudioApp(
         }
     val activeSourcePath =
         activeClip?.sourcePath?.takeIf { it.isNotBlank() } ?: activeMediaPath
+    val activeClipLabel =
+        activeClip?.let { scheduled ->
+            timelineProject.tracks
+                .asSequence()
+                .flatMap { it.clips.asSequence() }
+                .firstOrNull { it.id == scheduled.clipId }
+                ?.label
+        } ?: "none"
     val overlayTrack = timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
     val overlayClip =
         overlayTrack?.clips?.firstOrNull {
@@ -909,20 +917,28 @@ fun KinetixStudioApp(
                             }
                         }.verticalScroll(rememberScrollState())
                         .padding(innerPadding)
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
-                    text = "Kinetix3D Studio",
-                    color = StudioText,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "Day 1 — multi-module foundation",
-                    color = StudioAccent,
-                    fontSize = 14.sp,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Kinetix3D",
+                        color = StudioText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = demoState.activeComposition().name,
+                        color = StudioAccent,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Box(
                     modifier =
                         Modifier
@@ -963,6 +979,8 @@ fun KinetixStudioApp(
                             "${(settings.height * previewScale).toInt()}p PREVIEW · $effectLabel",
                     color = StudioMuted,
                     fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text =
@@ -971,14 +989,18 @@ fun KinetixStudioApp(
                             "${renderStats.tiles} tiles ${renderStats.format}",
                     color = StudioMuted,
                     fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text =
-                        "source: ${activeMediaPath?.let { File(it).name } ?: "procedural"}" +
-                            " · clip: ${activeClip?.clipId ?: "none"}" +
+                        "source: ${activeSourcePath?.let { File(it).name } ?: "procedural"}" +
+                            " · clip: $activeClipLabel" +
                             (importStatus?.let { " · $it" } ?: ""),
                     color = StudioMuted,
                     fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Row(
                     modifier =
