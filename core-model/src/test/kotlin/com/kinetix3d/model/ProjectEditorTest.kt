@@ -299,6 +299,25 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun moveLinkedClipsTogether() {
+        val detached = ProjectEditor.detachAudio(state(), "clip-1")
+        val result = ProjectEditor.moveClip(detached, "clip-1", 1_000_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(1_000_000L, clips.getValue("clip-1").timelineInUs)
+        assertEquals(1_000_000L, clips.getValue("clip-1-audio").timelineInUs)
+        assertEquals(3_000_000L, clips.getValue("clip-1-audio").timelineOutUs)
+    }
+
+    @Test
+    fun moveAudioMovesLinkedVideo() {
+        val detached = ProjectEditor.detachAudio(state(), "clip-1")
+        val result = ProjectEditor.moveClip(detached, "clip-1-audio", 2_000_000L)
+        val clips = result.activeComposition().clips
+        assertEquals(2_000_000L, clips.getValue("clip-1").timelineInUs)
+        assertEquals(2_000_000L, clips.getValue("clip-1-audio").timelineInUs)
+    }
+
+    @Test
     fun moveClipClampsAtZero() {
         val result = ProjectEditor.moveClip(state(), "clip-1", -5_000_000L)
         val clip = result.activeComposition().clips.getValue("clip-1")

@@ -178,12 +178,22 @@ object ProjectEditor {
         val start = newStartUs.coerceAtLeast(0L)
         if (start == clip.timelineInUs) return state
         val delta = start - clip.timelineInUs
-        val moved =
-            clip.copy(
-                timelineInUs = start,
-                timelineOutUs = clip.timelineOutUs + delta,
-            )
-        val updatedComposition = composition.copy(clips = composition.clips.putting(clipId, moved))
+        val linkGroup = clip.linkGroupId
+        var updatedClips = composition.clips
+        composition.clips.values.forEach { other ->
+            if (other.clipId == clipId || (linkGroup != null && other.linkGroupId == linkGroup)) {
+                val movedStart = (other.timelineInUs + delta).coerceAtLeast(0L)
+                updatedClips =
+                    updatedClips.putting(
+                        other.clipId,
+                        other.copy(
+                            timelineInUs = movedStart,
+                            timelineOutUs = movedStart + other.durationUs,
+                        ),
+                    )
+            }
+        }
+        val updatedComposition = composition.copy(clips = updatedClips)
         return state.copy(
             compositions = state.compositions.putting(composition.compositionId, updatedComposition),
         )
