@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Rust soft-knee compressor (ABI 3) in the AudioTrack path.
-- Verify ABI 3 loads and playback is clean on the phone.
+- Actions row horizontal scroll (no more squeezed Projects/Settings).
+- Move builds/tests/emulators to the Oracle VM.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -101,9 +101,11 @@ Updated: 2026-11-19
 - Phone-verified: the two-row header renders correctly; the Keys and Media dialogs open and are readable.
 - Adaptive timeline height: 220dp on screens shorter than 600dp (landscape/small phones), 300dp otherwise.
 - Rust soft-knee compressor (ABI 3): `applyCompressor` runs a one-pole envelope follower with attack/release coefficients and a 4:1 soft knee above 0.7; the Kotlin AudioTrack path applies it before the limiter. DSP extracted into pure Rust functions with 4 `cargo test` cases (quiet passthrough, attenuation, envelope tracking, cross-buffer state).
+- Actions row is horizontally scrollable: Add Marker / Markers / Keys / Media / Projects / Add Overlay / Settings / Set In / Set Out / Split All / Undo / Redo no longer squeeze "Projects" into a vertical column on 411dp phones. Phone-verified.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
+- Heavy work moved to the Oracle Cloud VM (16 vCPU, 31 GB RAM, KVM; SSH over Cloudflare HTTPS). VM access doc: `../VM-ACCESS.md`; VM coordination log: `/home/ubuntu/talk.txt`. JDK 21, Rust/cargo-ndk/NDK, and the repo clone are being set up there.
 - Re-verify culling/transient trim, audio/mute/Rust limiter/drift, per-asset waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
