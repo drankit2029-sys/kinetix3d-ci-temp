@@ -24,4 +24,11 @@ object KinetixAudioNative {
 
     /** ABI version of the native Rust core; bump with the JNI contract. */
     external fun abiVersion(): Int
+
+    /** Applies gain and a symmetric limiter to interleaved float samples. */
+    external fun applyGainAndLimit(
+        samples: FloatArray,
+        gain: Float,
+        limit: Float,
+    )
 }

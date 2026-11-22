@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Export notification opens the studio on tap.
-- Verify the content intent.
+- Rust gain/limiter DSP in the audio path.
+- Verify the native limiter and ABI bump.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -89,10 +89,11 @@ Updated: 2026-11-19
 - Export resolution presets: 1080p/4K in the settings dialog, carried through `ExportRequest` to the encoder; the status label shows the selected resolution.
 - Markers dialog: lists markers with their time/label and a Delete action; removal is persisted as a snapshot.
 - Export notification now has a content intent that opens the studio on tap.
+- Rust DSP: `KinetixAudioNative.applyGainAndLimit` (JNI, ABI 2) applies gain + a symmetric limiter to interleaved float samples; `AudioPlayback` converts decoded PCM to float, calls the native limiter, and writes it back to AudioTrack.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio/mute, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
+- Re-verify audio/mute/Rust limiter, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

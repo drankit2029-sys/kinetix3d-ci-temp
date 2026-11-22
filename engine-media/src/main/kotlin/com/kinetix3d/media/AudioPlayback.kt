@@ -13,6 +13,8 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.util.Log
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class AudioPlayback(
     private val sourcePath: String,
@@ -121,9 +123,15 @@ class AudioPlayback(
                 if (outputIndex >= 0) {
                     val buffer = decoder.getOutputBuffer(outputIndex)
                     if (buffer != null && info.size > 0) {
-                        val pcm = ByteArray(info.size)
-                        buffer.get(pcm)
-                        track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
+                        val shorts = ShortArray(info.size / 2)
+                        buffer.asShortBuffer().get(shorts)
+                        val floats = FloatArray(shorts.size) { shorts[it] / 32768f }
+                        runCatching { KinetixAudioNative.applyGainAndLimit(floats, 1f, 0.98f) }
+                        val pcm = ByteBuffer.allocate(floats.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+                        floats.forEach { sample ->
+                            pcm.putShort((sample.coerceIn(-1f, 1f) * 32767f).toInt().toShort())
+                        }
+                        track.write(pcm.array(), 0, pcm.capacity(), AudioTrack.WRITE_BLOCKING)
                     }
                     decoder.releaseOutputBuffer(outputIndex, false)
                 }
