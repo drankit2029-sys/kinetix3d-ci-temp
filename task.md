@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- V2 clip-driven overlay: Add Overlay + source-time mapping.
-- Phone-verify the V2 overlay blend.
+- Export foreground service: long renders survive backgrounding.
+- Phone-verify the service export + notification.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -59,9 +59,11 @@ Updated: 2026-11-19
 - Phone-verified: Composite 50% shows a clear double-exposure of the moving people at 60 fps; the overlay decoder shares the pool.
 - V2 clip-driven overlay: `ProjectEditor.addClip`, Add Overlay button, `TimelineClipUi.sourceInUs`, `RenderTicket.overlayPtsUs`, overlay source time = `sourceInUs + (playhead - clipStart)`.
 - Phone-verified Add Overlay: a 3s V2 video clip appears at the playhead; the overlay source/time wiring is built and unit-tested. Full V2 composite screenshot was blocked by the scrcpy server restarting repeatedly.
+- Export foreground service: `ExportForegroundService` (mediaProcessing), progress notification, `ExportRequest`/`ExportState` contract, `POST_NOTIFICATIONS` runtime request, UI observes the service state.
+- Phone-verified: export ran through the service, notification channel created, MediaStore reports 1920×1080 / 3000ms / 4.5MB, service stopped after completion.
 
 ## In progress
-- CI is blocked by GitHub Actions billing: run 44942660550 was not started ("recent account payments have failed or your spending limit needs to be increased"). Local build/tests/lint are green; the code is pushed.
+- CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
 - Re-verify the V2 composite on a stable virtual display.
 
 ## Next

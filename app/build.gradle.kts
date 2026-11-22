@@ -39,6 +39,7 @@ dependencies {
     implementation(project(":ui-studio"))
     implementation(project(":core-model"))
     implementation(project(":core-platform-api"))
+    implementation(project(":engine-render"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

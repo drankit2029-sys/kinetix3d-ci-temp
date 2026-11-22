@@ -43,7 +43,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -90,9 +89,7 @@ import com.kinetix3d.render.demoClipGraph
 import com.kinetix3d.render.demoCompositeGraph
 import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.render.demoKernelGraph
-import com.kinetix3d.render.export.HardwareExportSession
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -172,6 +169,8 @@ fun KinetixStudioApp(
     projectStore: ProjectStore? = null,
     platformApi: PlatformApi? = null,
     mediaPath: String? = null,
+    exportState: ExportState = ExportState.Idle,
+    onExport: (ExportRequest) -> Unit = {},
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
@@ -179,7 +178,6 @@ fun KinetixStudioApp(
     var selectedEffects by remember { mutableStateOf<List<String>>(emptyList()) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
-    var exportStatus by remember { mutableStateOf<String?>(null) }
     var renderStats by remember { mutableStateOf(RenderStats()) }
     var thumbnails by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var importStatus by remember { mutableStateOf<String?>(null) }
@@ -187,8 +185,20 @@ fun KinetixStudioApp(
     var outPointUs by remember { mutableLongStateOf(0L) }
     var showSettings by remember { mutableStateOf(false) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
-    val exportProgress = remember { MutableStateFlow(0f) }
-    val progress by exportProgress.collectAsState()
+    val exporting = exportState is ExportState.Running
+    val exportProgress =
+        when (val state = exportState) {
+            is ExportState.Running -> state.progress
+            is ExportState.Success -> 1f
+            else -> 0f
+        }
+    val exportStatus =
+        when (val state = exportState) {
+            ExportState.Idle -> null
+            is ExportState.Running -> "exporting…"
+            is ExportState.Success -> "exported ${state.frames} frames → ${state.uri}"
+            is ExportState.Failure -> "export failed: ${state.message}"
+        }
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }
     var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
@@ -737,67 +747,28 @@ fun KinetixStudioApp(
                 ) {
                     Button(
                         onClick = {
-                            val api = platformApi
-                            val path = activeMediaPath
-                            if (api == null || path == null) {
-                                exportStatus = "export unavailable (no media)"
-                                return@Button
-                            }
+                            val path = activeMediaPath ?: return@Button
                             if (path.endsWith(".png", true) || path.endsWith(".jpg", true) ||
                                 path.endsWith(".jpeg", true)
                             ) {
-                                exportStatus = "export needs a video source"
                                 return@Button
                             }
-                            scope.launch {
-                                exportStatus = "exporting…"
-                                exportProgress.value = 0f
-                                val result =
-                                    runCatching {
-                                        withContext(Dispatchers.Default) {
-                                            val output =
-                                                File(
-                                                    context.cacheDir,
-                                                    "kinetix-export-${System.currentTimeMillis()}.mp4",
-                                                )
-                                            HardwareExportSession(
-                                                sourcePath = path,
-                                                graph = demoGraph,
-                                                comp = demoState.settings.copy(width = 1920, height = 1080),
-                                                profile = deviceProfile ?: DeviceCapabilityProfile.tier2Default(),
-                                                outputFile = output,
-                                                durationUs = rangeEndUs,
-                                                startUs = rangeStartUs,
-                                            ).export { value -> exportProgress.value = value }
-                                        }
-                                    }
-                                result
-                                    .onSuccess { export ->
-                                        val published =
-                                            runCatching {
-                                                api.storageAndExport.publishExportAtomically(
-                                                    export.file,
-                                                    export.file.name,
-                                                    export.mimeType,
-                                                )
-                                            }
-                                        exportStatus =
-                                            published.fold(
-                                                onSuccess = {
-                                                    export.file.delete()
-                                                    "exported ${export.frames} frames → $it"
-                                                },
-                                                onFailure = { "export saved, publish failed: ${it.message}" },
-                                            )
-                                    }.onFailure { error ->
-                                        exportStatus = "export failed: ${error.message}"
-                                    }
-                            }
+                            onExport(
+                                ExportRequest(
+                                    sourcePath = path,
+                                    startUs = rangeStartUs,
+                                    durationUs = rangeEndUs,
+                                    width = 1920,
+                                    height = 1080,
+                                    fps = settings.fps,
+                                    effects = selectedEffects,
+                                ),
+                            )
                         },
                         modifier = Modifier.height(40.dp),
                     ) {
                         Text(
-                            if (exportStatus == "exporting…") {
+                            if (exporting) {
                                 "Exporting…"
                             } else {
                                 "Export ${String.format(Locale.US, "%.1fs", rangeDurationUs / 1_000_000.0)}"
@@ -817,9 +788,9 @@ fun KinetixStudioApp(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                if (exportStatus == "exporting…") {
+                if (exporting) {
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = { exportProgress },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

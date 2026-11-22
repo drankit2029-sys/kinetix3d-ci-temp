@@ -5,6 +5,11 @@
     <!-- No Phase 1 feature reads raw storage (media import is Phase 3). -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
 
+    <!-- Export runs in a mediaProcessing foreground service so long renders survive backgrounding. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
       media3-common (pulled in by media3-extractor's container demuxing) declares
       ACCESS_NETWORK_STATE for ExoPlayer data sources. The compositor path never
@@ -28,6 +33,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".ExportForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProcessing" />
     </application>
 
 </manifest>
