@@ -116,6 +116,7 @@ Updated: 2026-11-19
 - Settings and Markers dialogs verified on the audio-enabled API 36 emulator: resolution/fps/export presets and the empty-markers state render correctly.
 - Project catalog: the Projects dialog lists the saved project; New Project creates and switches to a fresh demo project, and the timeline reloads with the demo clips. Verified on the API 36 emulator.
 - 1080p export completed and **Open** launched the video player; the exported test pattern plays. The Cancel button is visible during export and `ExportForegroundService.cancel` is implemented, but the 1080p export finishes too quickly on the emulator to exercise the cancel path; a longer export is needed for that check.
+- FX rack collapse: the preview label row has a **Hide FX / Show FX** toggle. Collapsing hides the effect chips and composite blend-mode chips; verified on the API 36 emulator, the timeline moves up and is fully visible.
 
 ## MVP plan (target 2-4 weeks)
 
