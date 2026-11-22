@@ -198,6 +198,8 @@ fun TimelinePanel(
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onTrimStart: () -> Unit = {},
+    onTrimEnd: () -> Unit = {},
     onRippleTrimClip: (String, Long) -> Unit = { _, _ -> },
     onSlipClip: (String, Long) -> Unit = { _, _ -> },
     onSlideClip: (String, Long) -> Unit = { _, _ -> },
@@ -214,6 +216,7 @@ fun TimelinePanel(
 ) {
     var pxPerSecond by remember { mutableFloatStateOf(72f) }
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val density = LocalDensity.current
     val scrollState = rememberScrollState()
     val currentPlayhead by rememberUpdatedState(playheadUs)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
@@ -223,6 +226,17 @@ fun TimelinePanel(
     clock.frameRate = project.fps
     val durationUs = project.durationUs.coerceAtLeast(1_000_000L)
     val timelineWidth = ((durationUs / 1_000_000f) * pxPerSecond).dp
+    val timelineWidthPx = with(density) { timelineWidth.toPx() }
+    val viewportWidthPx = with(density) { (screenWidthDp - 76).coerceAtLeast(120).dp.toPx() }
+    val scrollPx = scrollState.value.toFloat()
+    val visibleStartUs =
+        if (timelineWidthPx > 0f) (scrollPx / timelineWidthPx * durationUs).toLong() else 0L
+    val visibleEndUs =
+        if (timelineWidthPx > 0f) {
+            ((scrollPx + viewportWidthPx) / timelineWidthPx * durationUs).toLong()
+        } else {
+            durationUs
+        }
     val trackHeight = 44.dp
     val rulerHeight = 28.dp
     val headerWidth = 76.dp
@@ -327,22 +341,26 @@ fun TimelinePanel(
                     }
                     TextButton(
                         onClick = {
+                            onTrimStart()
                             onTrimClip(
                                 selectedClip.id,
                                 selectedClip.startUs + TRIM_STEP_US,
                                 selectedClip.startUs + selectedClip.durationUs,
                             )
+                            onTrimEnd()
                         },
                     ) {
                         Text("Trim In +0.5s", fontSize = 10.sp)
                     }
                     TextButton(
                         onClick = {
+                            onTrimStart()
                             onTrimClip(
                                 selectedClip.id,
                                 selectedClip.startUs,
                                 selectedClip.startUs + selectedClip.durationUs - TRIM_STEP_US,
                             )
+                            onTrimEnd()
                         },
                     ) {
                         Text("Trim Out −0.5s", fontSize = 10.sp)
@@ -441,6 +459,10 @@ fun TimelinePanel(
                     selectedClipId = selectedClipId,
                     onSelectClip = onSelectClip,
                     onTrimClip = onTrimClip,
+                    onTrimStart = onTrimStart,
+                    onTrimEnd = onTrimEnd,
+                    visibleStartUs = visibleStartUs,
+                    visibleEndUs = visibleEndUs,
                     onMoveClipStart = onMoveClipStart,
                     onMoveClip = onMoveClip,
                     onMoveClipEnd = onMoveClipEnd,
@@ -467,6 +489,10 @@ private fun TimelineCanvas(
     selectedClipId: String?,
     onSelectClip: (String?) -> Unit,
     onTrimClip: (String, Long, Long) -> Unit,
+    onTrimStart: () -> Unit,
+    onTrimEnd: () -> Unit,
+    visibleStartUs: Long,
+    visibleEndUs: Long,
     onMoveClipStart: (String) -> Unit,
     onMoveClip: (String, Long) -> Unit,
     onMoveClipEnd: (String, Long) -> Unit,
@@ -491,6 +517,8 @@ private fun TimelineCanvas(
     val currentOnSelectClip by rememberUpdatedState(onSelectClip)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
     val currentOnTrimClip by rememberUpdatedState(onTrimClip)
+    val currentOnTrimStart by rememberUpdatedState(onTrimStart)
+    val currentOnTrimEnd by rememberUpdatedState(onTrimEnd)
     val currentOnMoveClipStart by rememberUpdatedState(onMoveClipStart)
     val currentOnMoveClip by rememberUpdatedState(onMoveClip)
     val currentOnMoveClipEnd by rememberUpdatedState(onMoveClipEnd)
@@ -547,6 +575,7 @@ private fun TimelineCanvas(
                                 trimDeltaUs = 0L
                                 moveClip = null
                                 currentOnSelectClip(edgeHit.clip.id)
+                                currentOnTrimStart()
                             } else {
                                 trimHit = null
                                 val bodyHit =
@@ -575,10 +604,12 @@ private fun TimelineCanvas(
                             if (moving != null) {
                                 currentOnMoveClipEnd(moving.id, (moveStartUs + moveDeltaUs).coerceAtLeast(0L))
                             }
+                            if (trimHit != null) currentOnTrimEnd()
                             trimHit = null
                             moveClip = null
                         },
                         onDragCancel = {
+                            if (trimHit != null) currentOnTrimEnd()
                             trimHit = null
                             moveClip = null
                         },
@@ -627,82 +658,84 @@ private fun TimelineCanvas(
                 topLeft = Offset(0f, top),
                 size = Size(size.width, trackPx),
             )
-            track.clips.forEach { clip ->
-                val left = (clip.startUs.toFloat() / durationUs.toFloat()) * size.width
-                val right = ((clip.startUs + clip.durationUs).toFloat() / durationUs.toFloat()) * size.width
-                val rectTop = top + 4f
-                val rectBottom = top + trackPx - 4f
-                drawRoundRect(
-                    color = clip.color,
-                    topLeft = Offset(left + 1f, rectTop),
-                    size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
-                    cornerRadius = CornerRadius(6f, 6f),
-                )
-                val thumb = thumbnails[clip.id]
-                if (thumb != null) {
-                    val clipWidth = (right - left - 2f).coerceAtLeast(2f)
-                    val clipHeight = (rectBottom - rectTop).coerceAtLeast(1f)
-                    val thumbWidth =
-                        (clipHeight * thumb.width / thumb.height)
-                            .coerceAtMost(clipWidth)
-                            .coerceAtLeast(1f)
-                    drawImage(
-                        image = thumb,
-                        srcOffset = IntOffset.Zero,
-                        srcSize = IntSize(thumb.width, thumb.height),
-                        dstOffset = IntOffset((left + 1f).toInt(), rectTop.toInt()),
-                        dstSize = IntSize(thumbWidth.toInt(), clipHeight.toInt()),
-                        alpha = 0.55f,
-                    )
-                }
-                val wave = waveforms[clip.id]
-                if (wave != null && !clip.isVideo) {
-                    val centerY = (rectTop + rectBottom) / 2f
-                    val maxHeight = (rectBottom - rectTop) * 0.8f
-                    val step = (right - left - 2f) / wave.size
-                    wave.forEachIndexed { index, peak ->
-                        val x = left + 1f + index * step
-                        val half = (peak * maxHeight / 2f).coerceAtLeast(0.5f)
-                        drawLine(
-                            color = Color(0xCCFFFFFF),
-                            start = Offset(x, centerY - half),
-                            end = Offset(x, centerY + half),
-                            strokeWidth = 1.5f,
-                        )
-                    }
-                }
-                if (clip.id == selectedClipId) {
+            track.clips
+                .filter { it.startUs + it.durationUs >= visibleStartUs && it.startUs <= visibleEndUs }
+                .forEach { clip ->
+                    val left = (clip.startUs.toFloat() / durationUs.toFloat()) * size.width
+                    val right = ((clip.startUs + clip.durationUs).toFloat() / durationUs.toFloat()) * size.width
+                    val rectTop = top + 4f
+                    val rectBottom = top + trackPx - 4f
                     drawRoundRect(
-                        color = Color.White,
+                        color = clip.color,
                         topLeft = Offset(left + 1f, rectTop),
                         size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
                         cornerRadius = CornerRadius(6f, 6f),
-                        style = Stroke(width = 2f),
                     )
-                    val handleWidth = 4.dp.toPx()
+                    val thumb = thumbnails[clip.id]
+                    if (thumb != null) {
+                        val clipWidth = (right - left - 2f).coerceAtLeast(2f)
+                        val clipHeight = (rectBottom - rectTop).coerceAtLeast(1f)
+                        val thumbWidth =
+                            (clipHeight * thumb.width / thumb.height)
+                                .coerceAtMost(clipWidth)
+                                .coerceAtLeast(1f)
+                        drawImage(
+                            image = thumb,
+                            srcOffset = IntOffset.Zero,
+                            srcSize = IntSize(thumb.width, thumb.height),
+                            dstOffset = IntOffset((left + 1f).toInt(), rectTop.toInt()),
+                            dstSize = IntSize(thumbWidth.toInt(), clipHeight.toInt()),
+                            alpha = 0.55f,
+                        )
+                    }
+                    val wave = waveforms[clip.id]
+                    if (wave != null && !clip.isVideo) {
+                        val centerY = (rectTop + rectBottom) / 2f
+                        val maxHeight = (rectBottom - rectTop) * 0.8f
+                        val step = (right - left - 2f) / wave.size
+                        wave.forEachIndexed { index, peak ->
+                            val x = left + 1f + index * step
+                            val half = (peak * maxHeight / 2f).coerceAtLeast(0.5f)
+                            drawLine(
+                                color = Color(0xCCFFFFFF),
+                                start = Offset(x, centerY - half),
+                                end = Offset(x, centerY + half),
+                                strokeWidth = 1.5f,
+                            )
+                        }
+                    }
+                    if (clip.id == selectedClipId) {
+                        drawRoundRect(
+                            color = Color.White,
+                            topLeft = Offset(left + 1f, rectTop),
+                            size = Size((right - left - 2f).coerceAtLeast(2f), rectBottom - rectTop),
+                            cornerRadius = CornerRadius(6f, 6f),
+                            style = Stroke(width = 2f),
+                        )
+                        val handleWidth = 4.dp.toPx()
+                        drawRect(
+                            color = Color.White,
+                            topLeft = Offset(left + 1f, rectTop),
+                            size = Size(handleWidth, rectBottom - rectTop),
+                        )
+                        drawRect(
+                            color = Color.White,
+                            topLeft = Offset(right - 1f - handleWidth, rectTop),
+                            size = Size(handleWidth, rectBottom - rectTop),
+                        )
+                    }
+                    val layout =
+                        textMeasurer.measure(
+                            text = clip.label,
+                            style = TextStyle(color = Color.White, fontSize = 9.sp),
+                        )
                     drawRect(
-                        color = Color.White,
-                        topLeft = Offset(left + 1f, rectTop),
-                        size = Size(handleWidth, rectBottom - rectTop),
+                        color = Color(0x99000000),
+                        topLeft = Offset(left + 4f, rectTop + 2f),
+                        size = Size(layout.size.width + 8f, layout.size.height + 4f),
                     )
-                    drawRect(
-                        color = Color.White,
-                        topLeft = Offset(right - 1f - handleWidth, rectTop),
-                        size = Size(handleWidth, rectBottom - rectTop),
-                    )
+                    drawText(layout, topLeft = Offset(left + 6f, rectTop + 4f))
                 }
-                val layout =
-                    textMeasurer.measure(
-                        text = clip.label,
-                        style = TextStyle(color = Color.White, fontSize = 9.sp),
-                    )
-                drawRect(
-                    color = Color(0x99000000),
-                    topLeft = Offset(left + 4f, rectTop + 2f),
-                    size = Size(layout.size.width + 8f, layout.size.height + 4f),
-                )
-                drawText(layout, topLeft = Offset(left + 6f, rectTop + 4f))
-            }
         }
         markers.forEach { marker ->
             val x = (marker.ptsUs.toFloat() / durationUs.toFloat()) * size.width

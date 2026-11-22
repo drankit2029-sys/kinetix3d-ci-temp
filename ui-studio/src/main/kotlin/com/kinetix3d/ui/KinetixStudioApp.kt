@@ -292,6 +292,7 @@ fun KinetixStudioApp(
     val undoStack = remember { mutableStateListOf<ProjectState>() }
     val redoStack = remember { mutableStateListOf<ProjectState>() }
     var moveBefore by remember { mutableStateOf<ProjectState?>(null) }
+    var trimBefore by remember { mutableStateOf<ProjectState?>(null) }
     val applyEdit: (ProjectState) -> Unit = { updated ->
         if (updated != demoState) {
             undoStack.add(demoState)
@@ -1014,17 +1015,25 @@ fun KinetixStudioApp(
                     selectedClipId = selectedClipId,
                     onSelectClip = { selectedClipId = it },
                     onTrimClip = { id, start, end ->
-                        val updated = demoState.trimClip(id, start, end)
-                        applyEdit(updated)
-                        val clip = updated.activeComposition().clips[id]
-                        val store = projectStore
-                        if (clip != null && store != null) {
-                            scope.launch {
-                                runCatching { store.recordClipUpdate(updated, clip) }
-                                    .onSuccess { persistenceStatus = "saved" }
-                                    .onFailure { persistenceStatus = "save failed" }
+                        demoState = demoState.trimClip(id, start, end)
+                    },
+                    onTrimStart = { trimBefore = demoState },
+                    onTrimEnd = {
+                        val before = trimBefore
+                        if (before != null && demoState != before) {
+                            undoStack.add(before)
+                            if (undoStack.size > UNDO_LIMIT) undoStack.removeAt(0)
+                            redoStack.clear()
+                            val store = projectStore
+                            if (store != null) {
+                                scope.launch {
+                                    runCatching { store.recordSnapshot(demoState) }
+                                        .onSuccess { persistenceStatus = "saved" }
+                                        .onFailure { persistenceStatus = "save failed" }
+                                }
                             }
                         }
+                        trimBefore = null
                     },
                     onRippleTrimClip = { id, _ -> rippleTrim(id) },
                     onSlipClip = slipClip,
