@@ -20,6 +20,7 @@ import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.platform.HardwareCapabilityProfiler
 import com.kinetix3d.platform.PlatformApiProvider
 import com.kinetix3d.render.demoClipGraph
+import com.kinetix3d.render.demoCompositeGraph
 import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.render.demoKernelGraph
 import com.kinetix3d.render.export.HardwareExportSession
@@ -77,6 +78,8 @@ class ExportForegroundService : Service() {
                             outputFile = output,
                             durationUs = request.durationUs,
                             startUs = request.startUs,
+                            overlayPath = request.overlayPath,
+                            overlayPtsOffsetUs = request.overlayPtsOffsetUs,
                         ).export { progress ->
                             mutableState.value = ExportState.Running(progress)
                             updateNotification(progress)
@@ -110,13 +113,8 @@ class ExportForegroundService : Service() {
     private fun graphFor(effects: List<String>) =
         when {
             effects.isEmpty() -> demoClipGraph()
-
             effects == listOf("color") -> demoEffectsGraph()
-
-            // The export session currently renders the base source; the composite
-            // overlay path is a preview-only feature until the export compositor lands.
-            effects == listOf("composite") -> demoClipGraph()
-
+            effects == listOf("composite") -> demoCompositeGraph()
             else -> demoKernelGraph(effects)
         }
 
@@ -159,6 +157,8 @@ class ExportForegroundService : Service() {
         private const val EXTRA_HEIGHT = "height"
         private const val EXTRA_FPS = "fps"
         private const val EXTRA_EFFECTS = "effects"
+        private const val EXTRA_OVERLAY_PATH = "overlayPath"
+        private const val EXTRA_OVERLAY_OFFSET_US = "overlayOffsetUs"
 
         private val mutableState = MutableStateFlow<ExportState>(ExportState.Idle)
         val state: StateFlow<ExportState> = mutableState.asStateFlow()
@@ -176,6 +176,8 @@ class ExportForegroundService : Service() {
                     putExtra(EXTRA_HEIGHT, request.height)
                     putExtra(EXTRA_FPS, request.fps)
                     putStringArrayListExtra(EXTRA_EFFECTS, ArrayList(request.effects))
+                    putExtra(EXTRA_OVERLAY_PATH, request.overlayPath)
+                    putExtra(EXTRA_OVERLAY_OFFSET_US, request.overlayPtsOffsetUs)
                 }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -190,6 +192,8 @@ class ExportForegroundService : Service() {
                 height = getIntExtra(EXTRA_HEIGHT, 1080),
                 fps = getDoubleExtra(EXTRA_FPS, 30.0),
                 effects = getStringArrayListExtra(EXTRA_EFFECTS).orEmpty(),
+                overlayPath = getStringExtra(EXTRA_OVERLAY_PATH),
+                overlayPtsOffsetUs = getLongExtra(EXTRA_OVERLAY_OFFSET_US, 0L),
             )
         }
     }

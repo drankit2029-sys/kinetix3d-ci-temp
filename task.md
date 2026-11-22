@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Audio playback: decode the active media's audio track to AudioTrack.
-- Verify audio starts/stops with the transport.
+- Composite export: render the base + overlay through the foreground service.
+- Verify the exported composite frames.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -69,10 +69,12 @@ Updated: 2026-11-19
 - Slip + slide are unit-tested; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
 - Audio playback: `AudioPlayback` decodes the active media's audio track to PCM and writes it to `AudioTrack`; the studio starts/stops it with the transport and releases it when the source changes.
 - Audio playback is built and lint-clean; phone verification is pending because the main display is in use and the scrcpy server keeps restarting.
+- Composite export: `HardwareExportSession` accepts an overlay path + source-time offset, creates a second `SynchronousVideoSource`, and renders `demoCompositeGraph`; the service and UI pass the V2 overlay path/offset.
+- Composite export is built and lint-clean; phone verification is pending on a stable display.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, the V2 composite, slip and slide on a stable display.
+- Re-verify audio, the V2 composite, slip/slide and composite export on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

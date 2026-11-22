@@ -14,6 +14,8 @@ data class ExportRequest(
     val height: Int,
     val fps: Double,
     val effects: List<String>,
+    val overlayPath: String? = null,
+    val overlayPtsOffsetUs: Long = 0L,
 )
 
 sealed interface ExportState {

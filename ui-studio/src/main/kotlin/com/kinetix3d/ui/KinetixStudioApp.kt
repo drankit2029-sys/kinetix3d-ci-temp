@@ -831,6 +831,14 @@ fun KinetixStudioApp(
                                     height = 1080,
                                     fps = settings.fps,
                                     effects = selectedEffects,
+                                    overlayPath =
+                                        if (selectedEffects == listOf("composite")) activeMediaPath else null,
+                                    overlayPtsOffsetUs =
+                                        if (selectedEffects == listOf("composite") && overlayClip != null) {
+                                            overlayClip.sourceInUs - overlayClip.startUs
+                                        } else {
+                                            0L
+                                        },
                                 ),
                             )
                         },

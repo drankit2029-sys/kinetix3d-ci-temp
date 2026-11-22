@@ -39,6 +39,8 @@ class HardwareExportSession(
     private val outputFile: File,
     private val durationUs: Long,
     private val startUs: Long = 0L,
+    private val overlayPath: String? = null,
+    private val overlayPtsOffsetUs: Long = 0L,
     private val mimeType: String = MediaFormat.MIMETYPE_VIDEO_AVC,
     private val bitRate: Int = DEFAULT_BIT_RATE,
 ) {
@@ -64,6 +66,7 @@ class HardwareExportSession(
         var core: EglCore? = null
         var pool: ReferenceCountedFboPool? = null
         var source: SynchronousVideoSource? = null
+        var overlaySource: SynchronousVideoSource? = null
         var executor: DagRenderExecutor? = null
         try {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -82,7 +85,9 @@ class HardwareExportSession(
             pool = fboPool
             val videoSource = SynchronousVideoSource(sourcePath)
             source = videoSource
-            val dag = DagRenderExecutor(fboPool, videoSource)
+            val overlay = overlayPath?.let { SynchronousVideoSource(it) }
+            overlaySource = overlay
+            val dag = DagRenderExecutor(fboPool, videoSource, overlay)
             executor = dag
             check(dag.initialize()) { "DAG executor initialization failed" }
             val plan =
@@ -98,7 +103,17 @@ class HardwareExportSession(
             for (frameIndex in 0 until frameCount) {
                 val ptsUs = startUs + (frameIndex * 1_000_000.0 / fps).toLong()
                 videoSource.update(ptsUs)
-                check(dag.render(plan, graph, width, height, ptsUs, playing = false)) {
+                check(
+                    dag.render(
+                        plan = plan,
+                        graph = graph,
+                        windowWidth = width,
+                        windowHeight = height,
+                        ptsUs = ptsUs,
+                        playing = false,
+                        overlayPtsUs = ptsUs + overlayPtsOffsetUs,
+                    ),
+                ) {
                     "DAG render failed at frame $frameIndex"
                 }
                 egl.setPresentationTime(ptsUs * 1_000L)
@@ -111,6 +126,7 @@ class HardwareExportSession(
             return ExportResult(outputFile, frameCount, rangeUs, mimeType)
         } finally {
             runCatching { executor?.close() }
+            runCatching { overlaySource?.release() }
             runCatching { source?.release() }
             runCatching { pool?.close() }
             runCatching { core?.destroy() }
