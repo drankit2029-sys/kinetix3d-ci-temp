@@ -89,6 +89,7 @@ data class TimelineClipUi(
     val color: Color,
     val isVideo: Boolean = false,
     val sourceInUs: Long = 0L,
+    val assetId: String? = null,
 )
 
 data class TimelineTrackUi(
@@ -160,6 +161,7 @@ fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
                             color = ClipColors[index % ClipColors.size],
                             isVideo = clip.payload is VideoClipPayload,
                             sourceInUs = clip.sourceInUs,
+                            assetId = clip.assetId,
                         )
                     }
             TimelineTrackUi(

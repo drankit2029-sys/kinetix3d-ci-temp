@@ -686,28 +686,37 @@ fun KinetixStudioApp(
         }
     }
 
-    LaunchedEffect(timelineProject, activeMediaPath) {
-        val path = activeMediaPath ?: return@LaunchedEffect
+    val assetPaths =
+        remember(demoState.mediaPool) {
+            demoState.mediaPool.values.associate { it.assetId to it.uri }
+        }
+    LaunchedEffect(timelineProject, activeMediaPath, assetPaths) {
         val videoClips = timelineProject.tracks.flatMap { it.clips }.filter { it.isVideo }
         val audioClips = timelineProject.tracks.flatMap { it.clips }.filter { !it.isVideo }
         thumbnails =
-            if (videoClips.isEmpty()) {
-                emptyMap()
-            } else {
-                withContext(Dispatchers.IO) {
-                    videoClips
-                        .mapNotNull { clip ->
-                            extractThumbnail(path, clip.startUs + clip.durationUs / 2)
-                                ?.let { clip.id to it.asImageBitmap() }
-                        }.toMap()
-                }
+            withContext(Dispatchers.IO) {
+                videoClips
+                    .mapNotNull { clip ->
+                        val path =
+                            clip.assetId?.let { assetPaths[it] }
+                                ?: activeMediaPath
+                                ?: return@mapNotNull null
+                        extractThumbnail(path, clip.startUs + clip.durationUs / 2)
+                            ?.let { clip.id to it.asImageBitmap() }
+                    }.toMap()
             }
         waveforms =
-            if (audioClips.isEmpty()) {
-                emptyMap()
-            } else {
-                val peaks = withContext(Dispatchers.IO) { WaveformGenerator.generate(path, 256) }
-                audioClips.associate { it.id to peaks }
+            withContext(Dispatchers.IO) {
+                val peaksByPath = mutableMapOf<String, FloatArray>()
+                audioClips
+                    .mapNotNull { clip ->
+                        val path =
+                            clip.assetId?.let { assetPaths[it] }
+                                ?: activeMediaPath
+                                ?: return@mapNotNull null
+                        val peaks = peaksByPath.getOrPut(path) { WaveformGenerator.generate(path, 256) }
+                        clip.id to peaks
+                    }.toMap()
             }
     }
 

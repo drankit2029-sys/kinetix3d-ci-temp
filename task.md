@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Media pool asset deletion.
-- Verify delete removes the asset and persists.
+- Per-asset thumbnails and waveforms.
+- Verify clips use their own media asset.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -94,10 +94,11 @@ Updated: 2026-11-19
 - Export completion notification: a non-ongoing notification with the frame count and a gallery content intent, posted after the foreground notification is removed.
 - Roadmap UI compliance: timeline clips are culled to the visible scroll range; trim drags now update the preview state only and commit one undo entry + one snapshot on release (matching the TransientMutationManager guideline).
 - Media pool asset deletion: the Media dialog has a Delete action that removes the asset from `mediaPool` and persists the snapshot.
+- Per-asset thumbnails/waveforms: `TimelineClipUi.assetId` maps clips to media-pool URIs; thumbnails and waveforms are generated per asset (cached per path) and fall back to the active source.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify culling/transient trim, audio/mute/Rust limiter/drift, waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
+- Re-verify culling/transient trim, audio/mute/Rust limiter/drift, per-asset waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.
