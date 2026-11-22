@@ -266,49 +266,62 @@ fun TimelinePanel(
     }
 
     Column(modifier = modifier.background(TimelineBackground)) {
-        Row(
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = project.name,
-                color = TimelineText,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = formatTime(playheadUs),
-                color = TimelineAccent,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = { onPlayingChange(!isPlaying) },
-                modifier = Modifier.height(40.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(if (isPlaying) "Pause" else "Play")
+                Text(
+                    text = project.name,
+                    color = TimelineText,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = formatTime(playheadUs),
+                    color = TimelineAccent,
+                    fontSize = 12.sp,
+                )
             }
-            TextButton(onClick = { onMutedChange(!muted) }) {
-                Text(if (muted) "Unmute" else "Mute", color = TimelineText)
-            }
-            TextButton(onClick = { pxPerSecond = (pxPerSecond - 16f).coerceAtLeast(32f) }) {
-                Text("−", color = TimelineText)
-            }
-            TextButton(onClick = { pxPerSecond = (pxPerSecond + 16f).coerceAtMost(160f) }) {
-                Text("+", color = TimelineText)
-            }
-            TextButton(
-                onClick = {
-                    val availableDp = (screenWidthDp - 76 - 16).coerceAtLeast(120)
-                    pxPerSecond =
-                        (availableDp / (durationUs / 1_000_000f)).coerceIn(32f, 160f)
-                },
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("Fit", color = TimelineText)
+                Button(
+                    onClick = { onPlayingChange(!isPlaying) },
+                    modifier = Modifier.height(40.dp),
+                ) {
+                    Text(if (isPlaying) "Pause" else "Play")
+                }
+                TextButton(onClick = { onMutedChange(!muted) }) {
+                    Text(if (muted) "Unmute" else "Mute", color = TimelineText)
+                }
+                TextButton(onClick = { pxPerSecond = (pxPerSecond - 16f).coerceAtLeast(32f) }) {
+                    Text("−", color = TimelineText)
+                }
+                TextButton(onClick = { pxPerSecond = (pxPerSecond + 16f).coerceAtMost(160f) }) {
+                    Text("+", color = TimelineText)
+                }
+                TextButton(
+                    onClick = {
+                        val availableDp = (screenWidthDp - 76 - 16).coerceAtLeast(120)
+                        pxPerSecond =
+                            (availableDp / (durationUs / 1_000_000f)).coerceIn(32f, 160f)
+                    },
+                ) {
+                    Text("Fit", color = TimelineText)
+                }
             }
         }
         if (selectedClip != null) {
