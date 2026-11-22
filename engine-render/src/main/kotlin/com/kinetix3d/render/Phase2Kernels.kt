@@ -1160,3 +1160,68 @@ class LayerStyleKernel {
         """
     }
 }
+
+class CornerPinKernel {
+    private val quad = FullscreenQuad()
+    private var textureLocation = -1
+    private var matrixLocation = -1
+
+    fun initialize(): Boolean {
+        if (!quad.create(FRAGMENT_SHADER)) return false
+        textureLocation = GLES20.glGetUniformLocation(quad.programId, "uTexture")
+        matrixLocation = GLES20.glGetUniformLocation(quad.programId, "uInvH")
+        return textureLocation >= 0 && matrixLocation >= 0
+    }
+
+    fun render(
+        inputTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        inverse: FloatArray?,
+    ) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
+        quad.use(0f, 0f, 1f, 1f)
+        GLES20.glUniform1i(textureLocation, 0)
+        GLES20.glUniformMatrix3fv(matrixLocation, 1, false, inverse ?: IDENTITY, 0)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+    }
+
+    fun release() = quad.release()
+
+    companion object {
+        private val IDENTITY =
+            floatArrayOf(
+                1f,
+                0f,
+                0f,
+                0f,
+                1f,
+                0f,
+                0f,
+                0f,
+                1f,
+            )
+
+        private const val FRAGMENT_SHADER = """
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            uniform mat3 uInvH;
+            void main() {
+                vec3 p = uInvH * vec3(vUv, 1.0);
+                vec2 src = p.xy / p.z;
+                if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                } else {
+                    gl_FragColor = texture2D(uTexture, src);
+                }
+            }
+        """
+    }
+}

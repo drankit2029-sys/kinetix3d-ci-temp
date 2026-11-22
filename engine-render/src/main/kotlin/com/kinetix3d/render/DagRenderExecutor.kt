@@ -32,6 +32,7 @@ class DagRenderExecutor(
     private val oscillate = OscillateKernel()
     private val optics = OpticsKernel()
     private val layerStyle = LayerStyleKernel()
+    private val cornerPin = CornerPinKernel()
     private val composite = CompositeKernel()
 
     fun initialize(): Boolean =
@@ -50,6 +51,7 @@ class DagRenderExecutor(
             oscillate.initialize() &&
             optics.initialize() &&
             layerStyle.initialize() &&
+            cornerPin.initialize() &&
             composite.initialize()
 
     fun render(
@@ -386,6 +388,34 @@ class DagRenderExecutor(
                         checkGl("layer-style")
                     }
 
+                    "kinetix.corner-pin" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        val aspect = viewportHeight.toFloat() / viewportWidth
+                        val corners =
+                            floatArrayOf(
+                                0f + param(graph, pass.nodeId, "topLeft", 0f) * aspect,
+                                0f + paramY(graph, pass.nodeId, "topLeft", 0f),
+                                1f + param(graph, pass.nodeId, "topRight", 0f) * aspect,
+                                0f + paramY(graph, pass.nodeId, "topRight", 0f),
+                                1f + param(graph, pass.nodeId, "bottomRight", 0f) * aspect,
+                                1f + paramY(graph, pass.nodeId, "bottomRight", 0f),
+                                0f + param(graph, pass.nodeId, "bottomLeft", 0f) * aspect,
+                                1f + paramY(graph, pass.nodeId, "bottomLeft", 0f),
+                            )
+                        cornerPin.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            inverse = Homography.inverseFromUnitSquare(corners),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("corner-pin")
+                    }
+
                     "kinetix.composite" -> {
                         val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         val overlay = overlaySource
@@ -445,6 +475,17 @@ class DagRenderExecutor(
             ?.get(key)
             ?.value ?: default
 
+    private fun paramY(
+        graph: NodeGraph,
+        nodeId: String,
+        key: String,
+        default: Float,
+    ): Float =
+        graph.nodes[nodeId]
+            ?.params
+            ?.get(key)
+            ?.valueY ?: default
+
     private fun checkGl(stage: String) {
         val error = GLES20.glGetError()
         if (error != GLES20.GL_NO_ERROR) {
@@ -503,6 +544,7 @@ class DagRenderExecutor(
         oscillate.release()
         optics.release()
         layerStyle.release()
+        cornerPin.release()
         composite.release()
         overlaySource?.release()
         source.release()

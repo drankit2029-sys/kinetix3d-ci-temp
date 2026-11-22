@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Layer Style kernel: drop shadow, outline, bevel, emboss.
-- Verify the style modes.
+- Corner Pin kernel with a real homography.
+- Verify the keystone/trapezoid transform.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -81,10 +81,11 @@ Updated: 2026-11-19
 - Oscillate / Auto-Shake kernel: sine/cos UV offset with amplitude/frequency/seed/time; `oscillate` chip in the FX rack.
 - Optics kernel: radial god rays, anamorphic streak and chromatic aberration; `optics` chip in the FX rack.
 - Layer Style kernel: drop shadow, outline, bevel and emboss; `style` chip in the FX rack.
+- Corner Pin: `Homography` (unit square → quad, inverse mat3) + `CornerPinKernel`; `ParamChannel.valueY` supports Vec2 params; `corner` chip with a trapezoid preset. JVM tests cover identity/affine/perspective inverses.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, Open, Oscillate, Optics and Style on a stable display.
+- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

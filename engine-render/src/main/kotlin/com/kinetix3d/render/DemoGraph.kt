@@ -32,6 +32,7 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
                 "oscillate" -> "kinetix.oscillate"
                 "optics" -> "kinetix.optics"
                 "style" -> "kinetix.layer-style"
+                "corner" -> "kinetix.corner-pin"
                 else -> return@forEach
             }
         val params =
@@ -69,6 +70,15 @@ fun demoKernelGraph(effects: List<String>): NodeGraph {
                     persistentMapOf(
                         "radius" to ParamChannel.constant(0.06f),
                         "opacity" to ParamChannel.constant(0.6f),
+                    )
+                }
+
+                "corner" -> {
+                    persistentMapOf(
+                        "topLeft" to ParamChannel.constant(0.12f, 0.08f),
+                        "topRight" to ParamChannel.constant(-0.12f, 0.08f),
+                        "bottomRight" to ParamChannel.constant(0f, 0f),
+                        "bottomLeft" to ParamChannel.constant(0f, 0f),
                     )
                 }
 

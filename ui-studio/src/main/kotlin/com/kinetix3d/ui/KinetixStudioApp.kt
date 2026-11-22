@@ -817,16 +817,17 @@ fun KinetixStudioApp(
                         onClick = { selectedEffects = listOf("composite") },
                         label = { Text("Composite") },
                     )
-                    listOf("warp", "glitch", "vectorify", "keyer", "oscillate", "optics", "style").forEach { effect ->
-                        FilterChip(
-                            selected = effect in selectedEffects,
-                            onClick = {
-                                val base = selectedEffects.filter { it != "color" }
-                                selectedEffects = if (effect in base) base - effect else base + effect
-                            },
-                            label = { Text(effect.replaceFirstChar { it.uppercase() }) },
-                        )
-                    }
+                    listOf("warp", "glitch", "vectorify", "keyer", "oscillate", "optics", "style", "corner")
+                        .forEach { effect ->
+                            FilterChip(
+                                selected = effect in selectedEffects,
+                                onClick = {
+                                    val base = selectedEffects.filter { it != "color" }
+                                    selectedEffects = if (effect in base) base - effect else base + effect
+                                },
+                                label = { Text(effect.replaceFirstChar { it.uppercase() }) },
+                            )
+                        }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),

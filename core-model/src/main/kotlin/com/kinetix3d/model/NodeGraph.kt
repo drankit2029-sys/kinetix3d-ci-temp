@@ -61,6 +61,8 @@ data class ParamChannel(
     val value: Float = 0f,
     val curve: KeyframeCurve<Float>? = null,
     val expression: String? = null,
+    /** Second component for Vec2 params (corner pin, offsets). */
+    val valueY: Float = 0f,
 ) {
     fun source(): ParamChannelSource =
         when {
@@ -71,6 +73,11 @@ data class ParamChannel(
 
     companion object {
         fun constant(value: Float): ParamChannel = ParamChannel(value = value)
+
+        fun constant(
+            value: Float,
+            valueY: Float,
+        ): ParamChannel = ParamChannel(value = value, valueY = valueY)
 
         fun animated(curve: KeyframeCurve<Float>): ParamChannel = ParamChannel(curve = curve)
 
