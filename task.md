@@ -107,7 +107,7 @@ Updated: 2026-11-19
 - Media pool bins/tags: `MediaAssetDescriptor.binId` + `tags`; `ProjectEditor.setAssetBin` / `addAssetTag` / `removeAssetTag`; the Media dialog groups assets by bin, cycles bins with a tap, opens a tag editor, and adds a specific asset to the timeline with its `assetId` bound. `addOverlay` now binds the media-pool asset ID instead of the file path. JVM tests cover bin moves, tag add/remove, asset-bound clips, and protobuf round-trip.
 - Bins/tags verified on the VM emulator (`k3d-api36`): imported a real MP4, cycled `default → b-roll`, added `#hero`, and Add-to-timeline created a clip bound to the asset.
 - Human-readable media names: `MediaAssetDescriptor.name` + `displayName()`; the SAF import stores `OpenableColumns.DISPLAY_NAME`; timeline labels and the Media dialog use the name (falling back to the URI file name). Verified on the emulator: the V1 clip now shows `kinetix-import-…mp4` instead of the raw asset ID.
-- Audio master clock: `AudioPlayback.isActive()`; `TimelinePanel` drives the playhead from the AudioTrack position when audio is active and falls back to the wall clock otherwise; the 500ms drift-correction restart loop is gone. Emulator playback verified to 00:04.016 at 55 fps (the emulator runs `-no-audio`, so the audio-driven branch needs a device with audio for final sign-off).
+- Audio master clock: `AudioPlayback.isActive()`; `TimelinePanel` drives the playhead from the AudioTrack position when audio is active and falls back to the wall clock otherwise; the 500ms drift-correction restart loop is gone. Verified on the audio-enabled API 36 emulator with an H.264+AAC test clip: `audio track playing: 3 48000Hz 1ch`, playhead advanced to **00:04.093** at 30 fps, waveform visible on the A1 clip.
 - Composite blend modes: the composite shader supports Normal/Screen/Multiply/Add via a `uBlendMode` uniform; `demoCompositeGraph(blendMode)` carries the param; the UI shows blend-mode chips when Composite is selected. `DemoGraphTest` covers the graph param.
 - Export polish: Cancel button + `ExportForegroundService.cancel`, ranged export duration fixed (`rangeEnd - rangeStart`), export uses the active/overlay asset paths, and the status moved to its own ellipsized line.
 - Compact header: Kinetix3D + project name row, 16dp content padding, single-line preview/status/source labels, and timeline clip labels constrained to the clip width.
@@ -165,6 +165,7 @@ Updated: 2026-11-19
 ## Codec matrix (VM emulator, API 36)
 
 - H.264 4K (3840x2160, 62 Mbps): imports and decodes at ~20 fps, RGBA16F, no crash.
+- H.264 1080p + AAC audio: imports, plays with the audio master clock, waveform visible.
 - HEVC 1080p: imports and decodes at ~14 fps, no crash.
 - AV1 1080p: imports and decodes at ~10 fps, no crash.
 - Portrait H.264 screen recording: imports and plays.
