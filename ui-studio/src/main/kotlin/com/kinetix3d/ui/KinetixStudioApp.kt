@@ -41,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -127,6 +128,7 @@ private const val EXPORT_DEMO_US = 3_000_000L
 private const val KEY_SEEK_STEP_US = 500_000L
 private const val UNDO_LIMIT = 50
 private const val AUDIO_DRIFT_LIMIT_US = 250_000L
+private val MEDIA_BINS = listOf("default", "b-roll", "music", "titles")
 
 private fun formatSeconds(us: Long): String = String.format(Locale.US, "%.1fs", us / 1_000_000.0)
 
@@ -206,6 +208,8 @@ fun KinetixStudioApp(
     var showSettings by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var showMedia by remember { mutableStateOf(false) }
+    var tagAssetId by remember { mutableStateOf<String?>(null) }
+    var tagText by remember { mutableStateOf("") }
     var showMarkers by remember { mutableStateOf(false) }
     var showShortcuts by remember { mutableStateOf(false) }
     var exportBitRate by remember { mutableIntStateOf(12_000_000) }
@@ -452,6 +456,10 @@ fun KinetixStudioApp(
                 ?: timelineProject.tracks.firstOrNull { it.type == "VIDEO" }
         val path = activeMediaPath
         if (track != null && path != null) {
+            val assetId =
+                demoState.mediaPool.values
+                    .firstOrNull { it.uri == path }
+                    ?.assetId ?: path
             val updated =
                 ProjectEditor.addClip(
                     state = demoState,
@@ -459,7 +467,7 @@ fun KinetixStudioApp(
                     startUs = playheadUs,
                     durationUs = 3_000_000L,
                     sourceInUs = 500_000L,
-                    assetId = path,
+                    assetId = assetId,
                 )
             if (updated != demoState) {
                 applyEdit(updated)
@@ -468,6 +476,35 @@ fun KinetixStudioApp(
                     scope.launch {
                         runCatching { store.recordSnapshot(updated) }
                             .onSuccess { persistenceStatus = "overlay added" }
+                            .onFailure { persistenceStatus = "save failed" }
+                    }
+                }
+            }
+        }
+    }
+    val addAssetToTimeline: (MediaAssetDescriptor) -> Unit = { asset ->
+        val track =
+            timelineProject.tracks.firstOrNull { it.name == "V1" && it.type == "VIDEO" }
+                ?: timelineProject.tracks.firstOrNull { it.type == "VIDEO" }
+        if (track != null) {
+            val duration =
+                if (asset.durationUs > 0L) minOf(asset.durationUs, 5_000_000L) else 3_000_000L
+            val updated =
+                ProjectEditor.addClip(
+                    state = demoState,
+                    trackId = track.name,
+                    startUs = playheadUs,
+                    durationUs = duration,
+                    sourceInUs = 0L,
+                    assetId = asset.assetId,
+                )
+            if (updated != demoState) {
+                applyEdit(updated)
+                val store = projectStore
+                if (store != null) {
+                    scope.launch {
+                        runCatching { store.recordSnapshot(updated) }
+                            .onSuccess { persistenceStatus = "asset added" }
                             .onFailure { persistenceStatus = "save failed" }
                     }
                 }
@@ -1274,40 +1311,109 @@ fun KinetixStudioApp(
                 onDismissRequest = { showMedia = false },
                 title = { Text("Media pool") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         if (demoState.mediaPool.isEmpty()) {
                             Text(
                                 "Import a video or image to add it to the pool.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        demoState.mediaPool.values.forEach { asset ->
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            activeMediaPath = asset.uri
-                                            prefs.edit().putString("source_path", asset.uri).apply()
-                                            renderView?.setSourcePath(asset.uri)
-                                            showMedia = false
-                                        },
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                        demoState.mediaPool.values
+                            .groupBy { it.binId }
+                            .toSortedMap()
+                            .forEach { (bin, assets) ->
                                 Text(
-                                    "${asset.kind} · ${asset.width}×${asset.height}",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    "${asset.sizeBytes / 1024} KB",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    bin.uppercase(),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontSize = 11.sp,
                                 )
-                                TextButton(onClick = { removeAsset(asset.assetId) }) {
-                                    Text("Delete")
+                                assets.forEach { asset ->
+                                    Column(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    activeMediaPath = asset.uri
+                                                    prefs.edit().putString("source_path", asset.uri).apply()
+                                                    renderView?.setSourcePath(asset.uri)
+                                                    showMedia = false
+                                                },
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "${asset.kind} · ${asset.width}×${asset.height}",
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Text(
+                                                "${asset.sizeBytes / 1024} KB",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 11.sp,
+                                            )
+                                            TextButton(onClick = { removeAsset(asset.assetId) }) {
+                                                Text("Delete")
+                                            }
+                                        }
+                                        Row(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState()),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            TextButton(onClick = { addAssetToTimeline(asset) }) {
+                                                Text("Add")
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    val next =
+                                                        MEDIA_BINS[
+                                                            (MEDIA_BINS.indexOf(asset.binId) + 1)
+                                                                .mod(MEDIA_BINS.size),
+                                                        ]
+                                                    val updated =
+                                                        ProjectEditor.setAssetBin(
+                                                            demoState,
+                                                            asset.assetId,
+                                                            next,
+                                                        )
+                                                    if (updated != demoState) {
+                                                        applyEdit(updated)
+                                                        val store = projectStore
+                                                        if (store != null) {
+                                                            scope.launch {
+                                                                runCatching { store.recordSnapshot(updated) }
+                                                                    .onSuccess { persistenceStatus = "bin updated" }
+                                                                    .onFailure { persistenceStatus = "save failed" }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            ) {
+                                                Text("Bin: ${asset.binId}")
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    tagAssetId = asset.assetId
+                                                    tagText = ""
+                                                },
+                                            ) {
+                                                Text("Tag")
+                                            }
+                                            asset.tags.forEach { tag ->
+                                                Text(
+                                                    "#$tag",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 11.sp,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
                     }
                 },
                 confirmButton = {
@@ -1322,6 +1428,78 @@ fun KinetixStudioApp(
                 },
                 dismissButton = {
                     TextButton(onClick = { showMedia = false }) {
+                        Text("Close")
+                    }
+                },
+            )
+        }
+        val tagAsset = tagAssetId?.let { demoState.mediaPool[it] }
+        if (tagAsset != null) {
+            AlertDialog(
+                onDismissRequest = { tagAssetId = null },
+                title = { Text("Tags · ${tagAsset.kind}") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = tagText,
+                            onValueChange = { tagText = it },
+                            label = { Text("New tag") },
+                            singleLine = true,
+                        )
+                        tagAsset.tags.forEach { tag ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("#$tag", modifier = Modifier.weight(1f))
+                                TextButton(
+                                    onClick = {
+                                        val updated =
+                                            ProjectEditor.removeAssetTag(
+                                                demoState,
+                                                tagAsset.assetId,
+                                                tag,
+                                            )
+                                        if (updated != demoState) {
+                                            applyEdit(updated)
+                                            val store = projectStore
+                                            if (store != null) {
+                                                scope.launch {
+                                                    runCatching { store.recordSnapshot(updated) }
+                                                        .onSuccess { persistenceStatus = "tag removed" }
+                                                        .onFailure { persistenceStatus = "save failed" }
+                                                }
+                                            }
+                                        }
+                                    },
+                                ) {
+                                    Text("Remove")
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val updated =
+                                ProjectEditor.addAssetTag(demoState, tagAsset.assetId, tagText)
+                            if (updated != demoState) {
+                                applyEdit(updated)
+                                val store = projectStore
+                                if (store != null) {
+                                    scope.launch {
+                                        runCatching { store.recordSnapshot(updated) }
+                                            .onSuccess { persistenceStatus = "tag added" }
+                                            .onFailure { persistenceStatus = "save failed" }
+                                    }
+                                }
+                            }
+                            tagText = ""
+                        },
+                    ) {
+                        Text("Add")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tagAssetId = null }) {
                         Text("Close")
                     }
                 },

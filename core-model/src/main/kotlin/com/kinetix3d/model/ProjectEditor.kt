@@ -189,6 +189,47 @@ object ProjectEditor {
         )
     }
 
+    /** Moves [assetId] into [binId]; blank names fall back to [DEFAULT_MEDIA_BIN]. */
+    fun setAssetBin(
+        state: ProjectState,
+        assetId: String,
+        binId: String,
+    ): ProjectState {
+        val asset = state.mediaPool[assetId] ?: return state
+        val normalized = binId.trim().ifEmpty { DEFAULT_MEDIA_BIN }
+        if (asset.binId == normalized) return state
+        return state.copy(
+            mediaPool = state.mediaPool.putting(assetId, asset.copy(binId = normalized)),
+        )
+    }
+
+    /** Adds a trimmed, non-blank tag to [assetId] if it is not already present. */
+    fun addAssetTag(
+        state: ProjectState,
+        assetId: String,
+        tag: String,
+    ): ProjectState {
+        val asset = state.mediaPool[assetId] ?: return state
+        val normalized = tag.trim()
+        if (normalized.isEmpty() || normalized in asset.tags) return state
+        return state.copy(
+            mediaPool = state.mediaPool.putting(assetId, asset.copy(tags = asset.tags + normalized)),
+        )
+    }
+
+    /** Removes [tag] from [assetId]. */
+    fun removeAssetTag(
+        state: ProjectState,
+        assetId: String,
+        tag: String,
+    ): ProjectState {
+        val asset = state.mediaPool[assetId] ?: return state
+        if (tag !in asset.tags) return state
+        return state.copy(
+            mediaPool = state.mediaPool.putting(assetId, asset.copy(tags = asset.tags - tag)),
+        )
+    }
+
     /** Shifts the clip's source range without moving its timeline range (slip). */
     fun slipClip(
         state: ProjectState,

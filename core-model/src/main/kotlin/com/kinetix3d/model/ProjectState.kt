@@ -327,6 +327,8 @@ enum class ColorRange { UNKNOWN, LIMITED, FULL }
  * Immutable media-pool entry. [uri] is always a plain [String] — never
  * android.net.Uri — so this module stays 100% JVM-clean.
  */
+const val DEFAULT_MEDIA_BIN: String = "default"
+
 @Serializable
 data class MediaAssetDescriptor(
     val assetId: String,
@@ -343,6 +345,10 @@ data class MediaAssetDescriptor(
     val colorTransfer: ColorTransfer = ColorTransfer.UNKNOWN,
     val colorRange: ColorRange = ColorRange.UNKNOWN,
     val proxyUri: String? = null,
+    /** Media-pool bin; [DEFAULT_MEDIA_BIN] when unassigned. */
+    val binId: String = DEFAULT_MEDIA_BIN,
+    /** Free-form tags used to filter the pool. */
+    val tags: List<String> = emptyList(),
 )
 
 // ---------------------------------------------------------------------------

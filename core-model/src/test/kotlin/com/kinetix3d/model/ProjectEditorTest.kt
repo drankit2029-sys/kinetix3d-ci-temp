@@ -40,6 +40,65 @@ class ProjectEditorTest {
         )
     }
 
+    private fun stateWithAsset(): ProjectState {
+        val asset =
+            MediaAssetDescriptor(
+                assetId = "asset-1",
+                uri = "/tmp/clip.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1024,
+                kind = AssetKind.VIDEO,
+                durationUs = 5_000_000L,
+            )
+        return state().copy(mediaPool = persistentMapOf(asset.assetId to asset))
+    }
+
+    @Test
+    fun setAssetBinMovesAssetAndIgnoresMissing() {
+        val state = stateWithAsset()
+        val moved = ProjectEditor.setAssetBin(state, "asset-1", "b-roll")
+        assertEquals("b-roll", moved.mediaPool.getValue("asset-1").binId)
+        assertSame(state, ProjectEditor.setAssetBin(state, "missing", "b-roll"))
+        val blank = ProjectEditor.setAssetBin(state, "asset-1", "  ")
+        assertEquals(DEFAULT_MEDIA_BIN, blank.mediaPool.getValue("asset-1").binId)
+    }
+
+    @Test
+    fun addAndRemoveAssetTags() {
+        val state = stateWithAsset()
+        val tagged = ProjectEditor.addAssetTag(state, "asset-1", " hero ")
+        assertEquals(listOf("hero"), tagged.mediaPool.getValue("asset-1").tags)
+        assertSame(tagged, ProjectEditor.addAssetTag(tagged, "asset-1", "hero"))
+        assertSame(tagged, ProjectEditor.addAssetTag(tagged, "asset-1", "  "))
+        val removed = ProjectEditor.removeAssetTag(tagged, "asset-1", "hero")
+        assertTrue(
+            removed.mediaPool
+                .getValue("asset-1")
+                .tags
+                .isEmpty(),
+        )
+        assertSame(removed, ProjectEditor.removeAssetTag(removed, "asset-1", "missing"))
+    }
+
+    @Test
+    fun addClipBindsTheMediaAssetId() {
+        val state = stateWithAsset()
+        val updated =
+            ProjectEditor.addClip(
+                state = state,
+                trackId = "V1",
+                startUs = 0L,
+                durationUs = 1_000_000L,
+                assetId = "asset-1",
+            )
+        val clip =
+            updated
+                .activeComposition()
+                .clips.values
+                .first { it.clipId != "clip-1" }
+        assertEquals("asset-1", clip.assetId)
+    }
+
     @Test
     fun splitAtMiddleCreatesTwoContiguousClips() {
         val result = ProjectEditor.splitClip(state(), "clip-1", 1_000_000L)

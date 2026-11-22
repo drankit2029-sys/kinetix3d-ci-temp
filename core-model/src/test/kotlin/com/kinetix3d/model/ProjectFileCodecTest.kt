@@ -46,6 +46,23 @@ class ProjectFileCodecTest {
     }
 
     @Test
+    fun roundTripsMediaAssetBinsAndTags() {
+        val asset =
+            MediaAssetDescriptor(
+                assetId = "asset-1",
+                uri = "/tmp/clip.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1024,
+                kind = AssetKind.VIDEO,
+                binId = "b-roll",
+                tags = listOf("hero", "outdoor"),
+            )
+        val state = sampleState().copy(mediaPool = persistentMapOf(asset.assetId to asset))
+        val decoded = ProjectFileCodec.decode(ProjectFileCodec.encode(state))
+        assertEquals(state.mediaPool, decoded.mediaPool)
+    }
+
+    @Test
     fun roundTripsTimelineMarkers() {
         val state =
             sampleState().copy(
