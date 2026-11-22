@@ -349,7 +349,15 @@ data class MediaAssetDescriptor(
     val binId: String = DEFAULT_MEDIA_BIN,
     /** Free-form tags used to filter the pool. */
     val tags: List<String> = emptyList(),
+    /** Original display name (e.g. "beach.mp4"); empty falls back to the URI. */
+    val name: String = "",
 )
+
+/** Human-readable asset name: the imported name, else the URI's file name. */
+fun MediaAssetDescriptor.displayName(): String =
+    name.ifBlank {
+        uri.substringAfterLast('/').substringAfterLast('\\').ifBlank { assetId }
+    }
 
 // ---------------------------------------------------------------------------
 // Composition & project

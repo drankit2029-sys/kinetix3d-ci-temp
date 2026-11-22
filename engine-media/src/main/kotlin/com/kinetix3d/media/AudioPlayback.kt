@@ -33,6 +33,9 @@ class AudioPlayback(
     @Volatile
     private var sampleRate = 48_000
 
+    @Volatile
+    private var hasAudioTrack = false
+
     private val wakeLock = Object()
     private val compressorState = FloatArray(1)
     private val eqState = FloatArray(12)
@@ -72,6 +75,9 @@ class AudioPlayback(
 
     /** Source timestamp the current playback started from. */
     fun startPtsUs(): Long = startPtsUs
+
+    /** True while a decoded audio track is feeding AudioTrack. */
+    fun isActive(): Boolean = running && hasAudioTrack
 
     /** Frames played since [start], converted to microseconds. */
     fun positionUs(): Long {
@@ -136,6 +142,7 @@ class AudioPlayback(
                     AudioTrack.MODE_STREAM,
                 )
             audioTrack = track
+            hasAudioTrack = true
             track.play()
             Log.d(TAG, "audio track playing: ${track.playState} ${sampleRate}Hz ${channels}ch")
             mediaExtractor.seekTo(startPtsUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
@@ -210,6 +217,7 @@ class AudioPlayback(
     }
 
     private fun releaseInternal() {
+        hasAudioTrack = false
         runCatching { audioTrack?.release() }
         audioTrack = null
         runCatching { codec?.stop() }

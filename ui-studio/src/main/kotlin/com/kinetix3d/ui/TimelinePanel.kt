@@ -144,7 +144,7 @@ fun demoTimelineProject(): TimelineProjectUi {
     )
 }
 
-fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
+fun CompositionGraph.toTimelineProjectUi(mediaNames: Map<String, String> = emptyMap()): TimelineProjectUi {
     val duration = durationUs().coerceAtLeast(1_000_000L)
     val tracksUi =
         tracks.mapIndexed { index, track ->
@@ -155,7 +155,7 @@ fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
                     .map { clip ->
                         TimelineClipUi(
                             id = clip.clipId,
-                            label = clipLabel(clip),
+                            label = clipLabel(clip, mediaNames),
                             startUs = clip.timelineInUs,
                             durationUs = clip.durationUs,
                             color = ClipColors[index % ClipColors.size],
@@ -178,12 +178,15 @@ fun CompositionGraph.toTimelineProjectUi(): TimelineProjectUi {
     )
 }
 
-private fun clipLabel(clip: ClipNode): String =
+private fun clipLabel(
+    clip: ClipNode,
+    mediaNames: Map<String, String>,
+): String =
     when (val payload = clip.payload) {
         is TextClipPayload -> payload.textSource.text
         is PolygonClipPayload -> payload.polygonId
         is PreCompClipPayload -> payload.targetCompId
-        else -> clip.assetId ?: clip.clipId
+        else -> clip.assetId?.let { mediaNames[it] ?: it } ?: clip.clipId
     }
 
 @Composable
@@ -197,6 +200,8 @@ fun TimelinePanel(
     onPlayingChange: (Boolean) -> Unit,
     muted: Boolean = false,
     onMutedChange: (Boolean) -> Unit = {},
+    /** Audio-master clock: returns the current audio playhead, or null to use the wall clock. */
+    audioPositionUs: (() -> Long?)? = null,
     selectedClipId: String? = null,
     onSelectClip: (String?) -> Unit = {},
     onTrimClip: (String, Long, Long) -> Unit = { _, _, _ -> },
@@ -223,6 +228,7 @@ fun TimelinePanel(
     val currentPlayhead by rememberUpdatedState(playheadUs)
     val currentOnPlayheadChange by rememberUpdatedState(onPlayheadChange)
     val currentOnPlayingChange by rememberUpdatedState(onPlayingChange)
+    val currentAudioPosition by rememberUpdatedState(audioPositionUs)
     val clock = remember { PlaybackClock(project.durationUs, project.fps) }
     clock.durationUs = project.durationUs
     clock.frameRate = project.fps
@@ -258,9 +264,16 @@ fun TimelinePanel(
         clock.play(startNanos)
         while (isPlaying) {
             withFrameNanos { frameNanos ->
-                val next = clock.framePtsUsAt(frameNanos)
-                currentOnPlayheadChange(next)
-                if (!clock.isPlaying) currentOnPlayingChange(false)
+                val audio = currentAudioPosition?.invoke()
+                if (audio != null) {
+                    // Audio is the master clock; keep the wall clock in sync for fallback.
+                    clock.seekTo(audio, frameNanos)
+                    currentOnPlayheadChange(audio)
+                } else {
+                    val next = clock.framePtsUsAt(frameNanos)
+                    currentOnPlayheadChange(next)
+                    if (!clock.isPlaying) currentOnPlayingChange(false)
+                }
             }
         }
     }

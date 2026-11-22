@@ -14,6 +14,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -94,6 +95,7 @@ import com.kinetix3d.model.HardwareTier
 import com.kinetix3d.model.MediaAssetDescriptor
 import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.model.ProjectState
+import com.kinetix3d.model.displayName
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.platform.project.ProjectSummary
@@ -104,12 +106,10 @@ import com.kinetix3d.render.demoCompositeGraph
 import com.kinetix3d.render.demoEffectsGraph
 import com.kinetix3d.render.demoKernelGraph
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.kinetix3d.ai.ModuleInfo as EngineAi
 import com.kinetix3d.evaluator.ModuleInfo as CoreEvaluator
@@ -127,7 +127,6 @@ private val StudioWarning = Color(0xFFFFB454)
 private const val EXPORT_DEMO_US = 3_000_000L
 private const val KEY_SEEK_STEP_US = 500_000L
 private const val UNDO_LIMIT = 50
-private const val AUDIO_DRIFT_LIMIT_US = 250_000L
 private val MEDIA_BINS = listOf("default", "b-roll", "music", "titles")
 
 private fun formatSeconds(us: Long): String = String.format(Locale.US, "%.1fs", us / 1_000_000.0)
@@ -259,7 +258,14 @@ fun KinetixStudioApp(
             selectedEffects == listOf("composite") -> "Composite 50%"
             else -> selectedEffects.joinToString(" → ") { it.replaceFirstChar { c -> c.uppercase() } }
         }
-    val timelineProject = remember(demoState) { demoState.activeComposition().toTimelineProjectUi() }
+    val mediaNames =
+        remember(demoState.mediaPool) {
+            demoState.mediaPool.values.associate { it.assetId to it.displayName() }
+        }
+    val timelineProject =
+        remember(demoState, mediaNames) {
+            demoState.activeComposition().toTimelineProjectUi(mediaNames)
+        }
     val hasRange = outPointUs > inPointUs
     val rangeStartUs = if (hasRange) inPointUs else 0L
     val rangeEndUs =
@@ -356,6 +362,18 @@ fun KinetixStudioApp(
                                 context.contentResolver.openInputStream(uri)?.use { input ->
                                     target.outputStream().use { output -> input.copyTo(output) }
                                 } ?: error("Unable to open the selected file")
+                                val displayName =
+                                    context.contentResolver
+                                        .query(
+                                            uri,
+                                            arrayOf(OpenableColumns.DISPLAY_NAME),
+                                            null,
+                                            null,
+                                            null,
+                                        )?.use { cursor ->
+                                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                                        }?.takeIf { it.isNotBlank() }
+                                        ?: target.name
                                 val retriever = MediaMetadataRetriever()
                                 retriever.setDataSource(target.absolutePath)
                                 val durationMs =
@@ -380,6 +398,7 @@ fun KinetixStudioApp(
                                     durationUs = durationMs * 1000L,
                                     width = width,
                                     height = height,
+                                    name = displayName,
                                 )
                             }
                         }
@@ -724,18 +743,6 @@ fun KinetixStudioApp(
 
     LaunchedEffect(muted, audioPlayback) {
         audioPlayback?.setVolume(if (muted) 0f else 1f)
-    }
-
-    LaunchedEffect(isPlaying, audioPlayback) {
-        val playback = audioPlayback ?: return@LaunchedEffect
-        while (isPlaying) {
-            delay(500)
-            val expected = playback.startPtsUs() + playback.positionUs()
-            if (abs(expected - playheadUs) > AUDIO_DRIFT_LIMIT_US) {
-                playback.restart(playheadUs)
-                playback.setVolume(if (muted) 0f else 1f)
-            }
-        }
     }
 
     val assetPaths =
@@ -1087,6 +1094,14 @@ fun KinetixStudioApp(
                     onPlayingChange = { isPlaying = it },
                     muted = muted,
                     onMutedChange = { muted = it },
+                    audioPositionUs = {
+                        val playback = audioPlayback
+                        if (playback != null && playback.isActive()) {
+                            playback.startPtsUs() + playback.positionUs()
+                        } else {
+                            null
+                        }
+                    },
                     selectedClipId = selectedClipId,
                     onSelectClip = { selectedClipId = it },
                     onTrimClip = { id, start, end ->
@@ -1343,10 +1358,14 @@ fun KinetixStudioApp(
                                                 },
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                "${asset.kind} · ${asset.width}×${asset.height}",
-                                                modifier = Modifier.weight(1f),
-                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(asset.displayName(), maxLines = 1)
+                                                Text(
+                                                    "${asset.kind} · ${asset.width}×${asset.height}",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 11.sp,
+                                                )
+                                            }
                                             Text(
                                                 "${asset.sizeBytes / 1024} KB",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

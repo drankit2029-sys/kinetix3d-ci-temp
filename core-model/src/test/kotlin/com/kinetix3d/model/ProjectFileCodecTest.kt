@@ -56,6 +56,7 @@ class ProjectFileCodecTest {
                 kind = AssetKind.VIDEO,
                 binId = "b-roll",
                 tags = listOf("hero", "outdoor"),
+                name = "clip.mp4",
             )
         val state = sampleState().copy(mediaPool = persistentMapOf(asset.assetId to asset))
         val decoded = ProjectFileCodec.decode(ProjectFileCodec.encode(state))

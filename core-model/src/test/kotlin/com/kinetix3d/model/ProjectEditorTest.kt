@@ -54,6 +54,20 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun displayNameFallsBackToTheUriFileName() {
+        val asset =
+            MediaAssetDescriptor(
+                assetId = "asset-1",
+                uri = "/tmp/beach.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1,
+                kind = AssetKind.VIDEO,
+            )
+        assertEquals("beach.mp4", asset.displayName())
+        assertEquals("hero.mp4", asset.copy(name = "hero.mp4").displayName())
+    }
+
+    @Test
     fun setAssetBinMovesAssetAndIgnoresMissing() {
         val state = stateWithAsset()
         val moved = ProjectEditor.setAssetBin(state, "asset-1", "b-roll")
