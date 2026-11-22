@@ -82,9 +82,11 @@ import com.kinetix3d.media.DecoderPoolManager
 import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.media.ScheduledClip
 import com.kinetix3d.media.WaveformGenerator
+import com.kinetix3d.model.AssetKind
 import com.kinetix3d.model.DeviceCapabilityProfile
 import com.kinetix3d.model.DirtyRenderLock
 import com.kinetix3d.model.HardwareTier
+import com.kinetix3d.model.MediaAssetDescriptor
 import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.platform.api.PlatformApi
@@ -196,6 +198,7 @@ fun KinetixStudioApp(
     var outPointUs by remember { mutableLongStateOf(0L) }
     var showSettings by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
+    var showMedia by remember { mutableStateOf(false) }
     var muted by remember { mutableStateOf(false) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
@@ -218,44 +221,6 @@ fun KinetixStudioApp(
     val prefs = remember { context.getSharedPreferences("kinetix", Context.MODE_PRIVATE) }
     var activeMediaPath by remember { mutableStateOf(prefs.getString("source_path", null) ?: mediaPath) }
     val scope = rememberCoroutineScope()
-    val importLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri != null) {
-                scope.launch {
-                    val imported =
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                val mime = context.contentResolver.getType(uri).orEmpty()
-                                val extension =
-                                    when {
-                                        mime.contains("png") -> "png"
-                                        mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
-                                        mime.contains("quicktime") -> "mov"
-                                        else -> "mp4"
-                                    }
-                                val target =
-                                    File(
-                                        context.getExternalFilesDir(null),
-                                        "kinetix-import-${System.currentTimeMillis()}.$extension",
-                                    )
-                                context.contentResolver.openInputStream(uri)?.use { input ->
-                                    target.outputStream().use { output -> input.copyTo(output) }
-                                } ?: error("Unable to open the selected file")
-                                target.absolutePath
-                            }
-                        }
-                    imported
-                        .onSuccess { path ->
-                            activeMediaPath = path
-                            prefs.edit().putString("source_path", path).apply()
-                            renderView?.setSourcePath(path)
-                            importStatus = "imported"
-                        }.onFailure { error ->
-                            importStatus = "import failed: ${error.message}"
-                        }
-                }
-            }
-        }
     val demoGraph =
         remember(selectedEffects) {
             when {
@@ -345,6 +310,81 @@ fun KinetixStudioApp(
             }
         }
     }
+    val importLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    val imported =
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val mime = context.contentResolver.getType(uri).orEmpty()
+                                val extension =
+                                    when {
+                                        mime.contains("png") -> "png"
+                                        mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
+                                        mime.contains("quicktime") -> "mov"
+                                        else -> "mp4"
+                                    }
+                                val target =
+                                    File(
+                                        context.getExternalFilesDir(null),
+                                        "kinetix-import-${System.currentTimeMillis()}.$extension",
+                                    )
+                                context.contentResolver.openInputStream(uri)?.use { input ->
+                                    target.outputStream().use { output -> input.copyTo(output) }
+                                } ?: error("Unable to open the selected file")
+                                val retriever = MediaMetadataRetriever()
+                                retriever.setDataSource(target.absolutePath)
+                                val durationMs =
+                                    retriever
+                                        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                        ?.toLongOrNull() ?: 0L
+                                val width =
+                                    retriever
+                                        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                                        ?.toIntOrNull() ?: 0
+                                val height =
+                                    retriever
+                                        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                                        ?.toIntOrNull() ?: 0
+                                retriever.release()
+                                MediaAssetDescriptor(
+                                    assetId = "asset-${System.currentTimeMillis()}",
+                                    uri = target.absolutePath,
+                                    mimeType = mime.ifBlank { "video/mp4" },
+                                    sizeBytes = target.length(),
+                                    kind = if (mime.startsWith("image/")) AssetKind.IMAGE else AssetKind.VIDEO,
+                                    durationUs = durationMs * 1000L,
+                                    width = width,
+                                    height = height,
+                                )
+                            }
+                        }
+                    imported
+                        .onSuccess { asset ->
+                            activeMediaPath = asset.uri
+                            prefs.edit().putString("source_path", asset.uri).apply()
+                            renderView?.setSourcePath(asset.uri)
+                            val updated =
+                                demoState.copy(
+                                    mediaPool = demoState.mediaPool.putting(asset.assetId, asset),
+                                )
+                            applyEdit(updated)
+                            val store = projectStore
+                            if (store != null) {
+                                scope.launch {
+                                    runCatching { store.recordSnapshot(updated) }
+                                        .onSuccess { persistenceStatus = "asset added" }
+                                        .onFailure { persistenceStatus = "save failed" }
+                                }
+                            }
+                            importStatus = "imported"
+                        }.onFailure { error ->
+                            importStatus = "import failed: ${error.message}"
+                        }
+                }
+            }
+        }
     val addOverlay: () -> Unit = {
         val track =
             timelineProject.tracks.firstOrNull { it.name == "V2" && it.type == "VIDEO" }
@@ -976,6 +1016,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = { showMedia = true }) {
+                        Text("Media")
+                    }
                     TextButton(onClick = { showProjects = true }) {
                         Text("Projects")
                     }
@@ -1043,6 +1086,61 @@ fun KinetixStudioApp(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+        }
+        if (showMedia) {
+            AlertDialog(
+                onDismissRequest = { showMedia = false },
+                title = { Text("Media pool") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (demoState.mediaPool.isEmpty()) {
+                            Text(
+                                "Import a video or image to add it to the pool.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        demoState.mediaPool.values.forEach { asset ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            activeMediaPath = asset.uri
+                                            prefs.edit().putString("source_path", asset.uri).apply()
+                                            renderView?.setSourcePath(asset.uri)
+                                            showMedia = false
+                                        },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${asset.kind} · ${asset.width}×${asset.height}",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "${asset.sizeBytes / 1024} KB",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            importLauncher.launch(arrayOf("video/*", "image/*"))
+                            showMedia = false
+                        },
+                    ) {
+                        Text("Import")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showMedia = false }) {
+                        Text("Close")
+                    }
+                },
+            )
         }
         if (showProjects) {
             AlertDialog(
