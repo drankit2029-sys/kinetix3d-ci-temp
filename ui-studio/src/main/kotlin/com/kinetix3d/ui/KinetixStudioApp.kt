@@ -15,6 +15,7 @@ import android.media.MediaMetadataRetriever
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -86,6 +87,7 @@ import com.kinetix3d.model.ProjectEditor
 import com.kinetix3d.model.ProjectState
 import com.kinetix3d.platform.api.PlatformApi
 import com.kinetix3d.platform.project.ProjectStore
+import com.kinetix3d.platform.project.ProjectSummary
 import com.kinetix3d.render.KinetixRenderView
 import com.kinetix3d.render.RenderStats
 import com.kinetix3d.render.demoClipGraph
@@ -174,6 +176,9 @@ fun KinetixStudioApp(
     mediaPath: String? = null,
     exportState: ExportState = ExportState.Idle,
     onExport: (ExportRequest) -> Unit = {},
+    projects: List<ProjectSummary> = emptyList(),
+    onOpenProject: (String) -> Unit = {},
+    onNewProject: () -> Unit = {},
 ) {
     var playheadUs by remember { mutableLongStateOf(0L) }
     var demoState by remember { mutableStateOf(demoProjectState()) }
@@ -188,6 +193,7 @@ fun KinetixStudioApp(
     var inPointUs by remember { mutableLongStateOf(0L) }
     var outPointUs by remember { mutableLongStateOf(0L) }
     var showSettings by remember { mutableStateOf(false) }
+    var showProjects by remember { mutableStateOf(false) }
     var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exporting = exportState is ExportState.Running
@@ -947,6 +953,9 @@ fun KinetixStudioApp(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    TextButton(onClick = { showProjects = true }) {
+                        Text("Projects")
+                    }
                     TextButton(onClick = addOverlay) {
                         Text("Add Overlay")
                     }
@@ -1011,6 +1020,56 @@ fun KinetixStudioApp(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+        }
+        if (showProjects) {
+            AlertDialog(
+                onDismissRequest = { showProjects = false },
+                title = { Text("Projects") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (projects.isEmpty()) {
+                            Text(
+                                "No saved projects yet.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        projects.forEach { project ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onOpenProject(project.projectId)
+                                            showProjects = false
+                                        },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(project.displayName, modifier = Modifier.weight(1f))
+                                Text(
+                                    "${project.sizeBytes / 1024} KB",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onNewProject()
+                            showProjects = false
+                        },
+                    ) {
+                        Text("New Project")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showProjects = false }) {
+                        Text("Close")
+                    }
+                },
+            )
         }
         if (showSettings) {
             AlertDialog(

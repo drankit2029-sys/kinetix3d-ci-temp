@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Timeline Fit button.
-- Verify the whole project fits the visible timeline width.
+- Project catalog: list/open/create `.kproj` projects.
+- Verify switching projects and creating a new one.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -76,10 +76,11 @@ Updated: 2026-11-19
 - Export cancellation: `HardwareExportSession` checks `isCancelled` per frame; the service handles the notification Cancel action, sets `ExportState.Cancelled`, and stops.
 - Cancellation is built and lint-clean; phone verification is pending on a stable display.
 - Timeline Fit button: sets `pxPerSecond` so the whole project duration fits the visible width (clamped 32–160 dp/s).
+- Project catalog: `ProjectCatalog` lists/creates `.kproj` files; the Projects dialog opens a project or creates a new one; `MainActivity` swaps the `ProjectStore` per active project. JVM tests cover create/list, corrupt files and missing directories.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel and Fit on a stable display.
+- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit and project switching on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

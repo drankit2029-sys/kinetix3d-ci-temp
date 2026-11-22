@@ -20,12 +20,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.kinetix3d.platform.project.ProjectCatalog
 import com.kinetix3d.platform.project.ProjectStore
 import com.kinetix3d.ui.KinetixStudioApp
 import com.kinetix3d.ui.demoMediaPath
+import com.kinetix3d.ui.demoProjectState
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +43,13 @@ class MainActivity : ComponentActivity() {
             val renderGuard by kinetix.renderGuard.collectAsState()
             val exportState by ExportForegroundService.state.collectAsState()
             val context = LocalContext.current
-            val projectStore = remember { ProjectStore.create(context.applicationContext, "demo") }
+            var activeProjectId by remember { mutableStateOf("demo") }
+            val projectStore =
+                remember(activeProjectId) {
+                    ProjectStore.create(context.applicationContext, activeProjectId)
+                }
+            val catalog = remember { ProjectCatalog(File(context.filesDir, "projects")) }
+            var projects by remember { mutableStateOf(catalog.list()) }
             val notificationPermission =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
             DisposableEffect(projectStore) {
@@ -62,6 +73,17 @@ class MainActivity : ComponentActivity() {
                 mediaPath = demoMediaPath(context),
                 exportState = exportState,
                 onExport = { request -> ExportForegroundService.start(context, request) },
+                projects = projects,
+                onOpenProject = { projectId ->
+                    activeProjectId = projectId
+                    projects = catalog.list()
+                },
+                onNewProject = {
+                    val projectId = "project-${System.currentTimeMillis()}"
+                    catalog.create(projectId, demoProjectState().copy(projectId = projectId))
+                    projects = catalog.list()
+                    activeProjectId = projectId
+                },
             )
         }
     }
