@@ -31,6 +31,7 @@ class DagRenderExecutor(
     private val keyer = KeyerKernel()
     private val oscillate = OscillateKernel()
     private val optics = OpticsKernel()
+    private val layerStyle = LayerStyleKernel()
     private val composite = CompositeKernel()
 
     fun initialize(): Boolean =
@@ -48,6 +49,7 @@ class DagRenderExecutor(
             keyer.initialize() &&
             oscillate.initialize() &&
             optics.initialize() &&
+            layerStyle.initialize() &&
             composite.initialize()
 
     fun render(
@@ -366,6 +368,24 @@ class DagRenderExecutor(
                         checkGl("optics")
                     }
 
+                    "kinetix.layer-style" -> {
+                        val out = pool.acquire(roiWidth, roiHeight) ?: return false
+                        layerStyle.render(
+                            inputTexture = currentTexture,
+                            outputFramebuffer = out.framebufferId,
+                            width = roiWidth,
+                            height = roiHeight,
+                            radius = param(graph, pass.nodeId, "radius", 0.06f),
+                            opacity = param(graph, pass.nodeId, "opacity", 0.6f),
+                            mode = modeIndex(pass.modeId, "drop_shadow", "outline", "bevel", "emboss"),
+                        )
+                        currentHandle?.let { pool.release(it) }
+                        currentHandle = out
+                        currentFramebuffer = out.framebufferId
+                        currentTexture = out.textureId
+                        checkGl("layer-style")
+                    }
+
                     "kinetix.composite" -> {
                         val out = pool.acquire(roiWidth, roiHeight) ?: return false
                         val overlay = overlaySource
@@ -482,6 +502,7 @@ class DagRenderExecutor(
         keyer.release()
         oscillate.release()
         optics.release()
+        layerStyle.release()
         composite.release()
         overlaySource?.release()
         source.release()

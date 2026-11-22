@@ -1077,3 +1077,86 @@ class OpticsKernel {
         """
     }
 }
+
+class LayerStyleKernel {
+    private val quad = FullscreenQuad()
+    private var textureLocation = -1
+    private var radiusLocation = -1
+    private var opacityLocation = -1
+    private var modeLocation = -1
+
+    fun initialize(): Boolean {
+        if (!quad.create(FRAGMENT_SHADER)) return false
+        textureLocation = GLES20.glGetUniformLocation(quad.programId, "uTexture")
+        radiusLocation = GLES20.glGetUniformLocation(quad.programId, "uRadius")
+        opacityLocation = GLES20.glGetUniformLocation(quad.programId, "uOpacity")
+        modeLocation = GLES20.glGetUniformLocation(quad.programId, "uMode")
+        return textureLocation >= 0 && radiusLocation >= 0 && opacityLocation >= 0 && modeLocation >= 0
+    }
+
+    fun render(
+        inputTexture: Int,
+        outputFramebuffer: Int,
+        width: Int,
+        height: Int,
+        radius: Float,
+        opacity: Float,
+        mode: Int,
+    ) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outputFramebuffer)
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
+        quad.use(0f, 0f, 1f, 1f)
+        GLES20.glUniform1i(textureLocation, 0)
+        GLES20.glUniform1f(radiusLocation, radius)
+        GLES20.glUniform1f(opacityLocation, opacity)
+        GLES20.glUniform1i(modeLocation, mode)
+        quad.draw()
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+    }
+
+    fun release() = quad.release()
+
+    companion object {
+        private const val FRAGMENT_SHADER = """
+            precision mediump float;
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            uniform float uRadius;
+            uniform float uOpacity;
+            uniform int uMode;
+            void main() {
+                vec4 color = texture2D(uTexture, vUv);
+                float step = max(uRadius * 0.25, 0.001);
+                if (uMode == 0) {
+                    vec4 shadow = texture2D(uTexture, vUv - vec2(step, step));
+                    gl_FragColor = vec4(mix(color.rgb, vec3(0.0), shadow.a * uOpacity), 1.0);
+                } else if (uMode == 1) {
+                    float edge = 0.0;
+                    edge += texture2D(uTexture, vUv + vec2(step, 0.0)).a;
+                    edge += texture2D(uTexture, vUv - vec2(step, 0.0)).a;
+                    edge += texture2D(uTexture, vUv + vec2(0.0, step)).a;
+                    edge += texture2D(uTexture, vUv - vec2(0.0, step)).a;
+                    edge = clamp(edge, 0.0, 1.0);
+                    gl_FragColor = vec4(mix(color.rgb, vec3(1.0), edge * uOpacity), 1.0);
+                } else if (uMode == 2) {
+                    float dx = texture2D(uTexture, vUv + vec2(step, 0.0)).r -
+                        texture2D(uTexture, vUv - vec2(step, 0.0)).r;
+                    float dy = texture2D(uTexture, vUv + vec2(0.0, step)).r -
+                        texture2D(uTexture, vUv - vec2(0.0, step)).r;
+                    float light = clamp(0.5 + (dx + dy) * 2.0, 0.0, 1.0);
+                    gl_FragColor = vec4(color.rgb * (0.7 + light * 0.6), 1.0);
+                } else {
+                    float dx = texture2D(uTexture, vUv + vec2(step, 0.0)).r -
+                        texture2D(uTexture, vUv - vec2(step, 0.0)).r;
+                    float dy = texture2D(uTexture, vUv + vec2(0.0, step)).r -
+                        texture2D(uTexture, vUv - vec2(0.0, step)).r;
+                    float v = clamp(0.5 + (dx + dy) * 3.0, 0.0, 1.0);
+                    gl_FragColor = vec4(vec3(v), 1.0);
+                }
+            }
+        """
+    }
+}
