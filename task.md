@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Markers dialog with delete.
-- Verify marker add/delete and persistence.
+- Export notification opens the studio on tap.
+- Verify the content intent.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -88,6 +88,7 @@ Updated: 2026-11-19
 - Export bitrate presets: 6/12/24 Mbps in the settings dialog, carried through `ExportRequest`/the service to the encoder; the status label shows the selected bitrate.
 - Export resolution presets: 1080p/4K in the settings dialog, carried through `ExportRequest` to the encoder; the status label shows the selected resolution.
 - Markers dialog: lists markers with their time/label and a Delete action; removal is persisted as a snapshot.
+- Export notification now has a content intent that opens the studio on tap.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.

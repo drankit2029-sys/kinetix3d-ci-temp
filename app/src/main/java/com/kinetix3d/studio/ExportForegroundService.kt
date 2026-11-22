@@ -159,7 +159,14 @@ class ExportForegroundService : Service() {
         .setContentText(text)
         .setProgress(100, (progress * 100f).toInt(), false)
         .setOngoing(true)
-        .addAction(0, "Cancel", cancelPendingIntent())
+        .setContentIntent(
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            ),
+        ).addAction(0, "Cancel", cancelPendingIntent())
         .build()
 
     private fun cancelPendingIntent(): PendingIntent {
