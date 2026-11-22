@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Slide trim: move a clip while adjusting adjacent clips to keep track duration.
-- Verify slide and commit.
+- Audio playback: decode the active media's audio track to AudioTrack.
+- Verify audio starts/stops with the transport.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -67,10 +67,12 @@ Updated: 2026-11-19
 - Slip UI verified on device; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
 - Slide trim: `ProjectEditor.slideClip` moves a clip and adjusts the previous out/next in points so track duration is unchanged; Slide −/+ buttons and `;`/`'` shortcuts; JVM tests cover right/left slides and missing clips.
 - Slip + slide are unit-tested; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
+- Audio playback: `AudioPlayback` decodes the active media's audio track to PCM and writes it to `AudioTrack`; the studio starts/stops it with the transport and releases it when the source changes.
+- Audio playback is built and lint-clean; phone verification is pending because the main display is in use and the scrcpy server keeps restarting.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify the V2 composite, slip and slide on a stable virtual display.
+- Re-verify audio, the V2 composite, slip and slide on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

@@ -42,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -73,6 +74,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.kinetix3d.media.AudioPlayback
 import com.kinetix3d.media.DecoderPoolManager
 import com.kinetix3d.media.KinetixAudioNative
 import com.kinetix3d.media.ScheduledClip
@@ -184,6 +186,7 @@ fun KinetixStudioApp(
     var inPointUs by remember { mutableLongStateOf(0L) }
     var outPointUs by remember { mutableLongStateOf(0L) }
     var showSettings by remember { mutableStateOf(false) }
+    var audioPlayback by remember { mutableStateOf<AudioPlayback?>(null) }
     var renderView by remember { mutableStateOf<KinetixRenderView?>(null) }
     val exporting = exportState is ExportState.Running
     val exportProgress =
@@ -543,6 +546,24 @@ fun KinetixStudioApp(
     LaunchedEffect(activeClip?.clipId) {
         val path = activeClip?.sourcePath
         if (!path.isNullOrBlank()) renderView?.setSourcePath(path)
+    }
+
+    DisposableEffect(activeMediaPath) {
+        val playback = activeMediaPath?.let { AudioPlayback(it) }
+        audioPlayback = playback
+        onDispose {
+            playback?.close()
+            audioPlayback = null
+        }
+    }
+
+    LaunchedEffect(isPlaying, audioPlayback) {
+        val playback = audioPlayback
+        if (isPlaying) {
+            playback?.start(playheadUs)
+        } else {
+            playback?.stop()
+        }
     }
 
     LaunchedEffect(timelineProject, activeMediaPath) {
