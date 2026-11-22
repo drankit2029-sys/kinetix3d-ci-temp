@@ -167,6 +167,29 @@ object ProjectEditor {
         )
     }
 
+    /** Shifts the clip's source range without moving its timeline range (slip). */
+    fun slipClip(
+        state: ProjectState,
+        clipId: String,
+        deltaUs: Long,
+    ): ProjectState {
+        val composition = state.activeComposition()
+        val clip = composition.clips[clipId] ?: return state
+        if (deltaUs == 0L) return state
+        val newIn = (clip.sourceInUs + deltaUs).coerceAtLeast(0L)
+        val actualDelta = newIn - clip.sourceInUs
+        if (actualDelta == 0L) return state
+        val slipped =
+            clip.copy(
+                sourceInUs = newIn,
+                sourceOutUs = clip.sourceOutUs + actualDelta,
+            )
+        val updatedComposition = composition.copy(clips = composition.clips.putting(clipId, slipped))
+        return state.copy(
+            compositions = state.compositions.putting(composition.compositionId, updatedComposition),
+        )
+    }
+
     /** Moves a clip to [newStartUs], preserving its duration and source range. */
     fun moveClip(
         state: ProjectState,

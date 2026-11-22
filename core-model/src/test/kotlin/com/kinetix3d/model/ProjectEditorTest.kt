@@ -299,6 +299,30 @@ class ProjectEditorTest {
     }
 
     @Test
+    fun slipClipShiftsTheSourceRange() {
+        val result = ProjectEditor.slipClip(state(), "clip-1", 500_000L)
+        val clip = result.activeComposition().clips.getValue("clip-1")
+        assertEquals(0L, clip.timelineInUs)
+        assertEquals(2_000_000L, clip.timelineOutUs)
+        assertEquals(1_000_000L, clip.sourceInUs)
+        assertEquals(3_000_000L, clip.sourceOutUs)
+    }
+
+    @Test
+    fun slipClipClampsAtZero() {
+        val result = ProjectEditor.slipClip(state(), "clip-1", -5_000_000L)
+        val clip = result.activeComposition().clips.getValue("clip-1")
+        assertEquals(0L, clip.sourceInUs)
+        assertEquals(2_000_000L, clip.sourceOutUs)
+    }
+
+    @Test
+    fun slipMissingClipIsANoOp() {
+        val state = state()
+        assertSame(state, ProjectEditor.slipClip(state, "missing", 500_000L))
+    }
+
+    @Test
     fun moveLinkedClipsTogether() {
         val detached = ProjectEditor.detachAudio(state(), "clip-1")
         val result = ProjectEditor.moveClip(detached, "clip-1", 1_000_000L)

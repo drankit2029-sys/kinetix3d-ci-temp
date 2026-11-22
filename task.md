@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Linked clip moves: video + detached audio move together.
-- Phone-verify the linked move and persistence.
+- Slip trim: shift the source range without moving the clip.
+- Phone-verify the slip frame change.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -63,10 +63,12 @@ Updated: 2026-11-19
 - Phone-verified: export ran through the service, notification channel created, MediaStore reports 1920×1080 / 3000ms / 4.5MB, service stopped after completion.
 - Linked clip moves: `ProjectEditor.moveClip` shifts every clip sharing the `linkGroupId`; JVM tests cover video→audio and audio→video moves.
 - Phone-verified: moving Winter Olympics by +0.5s moved the linked A2 audio too; restart kept both.
+- Slip trim: `ProjectEditor.slipClip` shifts `sourceInUs`/`sourceOutUs` without moving the timeline range; Slip −/+ buttons and `,`/`.` shortcuts; JVM tests cover the shift, zero clamp and missing clips.
+- Slip UI verified on device; the frame-change screenshot was blocked by the scrcpy display disappearing mid-test.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify the V2 composite on a stable virtual display.
+- Re-verify the V2 composite and slip frame change on a stable virtual display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.
