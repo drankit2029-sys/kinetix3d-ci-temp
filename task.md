@@ -3,8 +3,8 @@
 Updated: 2026-11-19
 
 ## Current focus
-- Project catalog: list/open/create `.kproj` projects.
-- Verify switching projects and creating a new one.
+- Open exported video from the success status.
+- Verify the viewer intent.
 
 ## Done
 - Phase 1: model, WAL, evaluator, 7 OS managers, hardware profiler.
@@ -77,10 +77,11 @@ Updated: 2026-11-19
 - Cancellation is built and lint-clean; phone verification is pending on a stable display.
 - Timeline Fit button: sets `pxPerSecond` so the whole project duration fits the visible width (clamped 32–160 dp/s).
 - Project catalog: `ProjectCatalog` lists/creates `.kproj` files; the Projects dialog opens a project or creates a new one; `MainActivity` swaps the `ProjectStore` per active project. JVM tests cover create/list, corrupt files and missing directories.
+- Export success now shows an Open button that launches the gallery viewer with the published MediaStore URI.
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit and project switching on a stable display.
+- Re-verify audio, waveforms, the V2 composite, slip/slide, composite export, cancel, Fit, project switching and Open on a stable display.
 
 ## Next
 - V2 clip-driven overlay source and per-track compositing.

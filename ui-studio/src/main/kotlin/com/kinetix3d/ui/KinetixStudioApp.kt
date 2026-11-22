@@ -10,8 +10,10 @@
 package com.kinetix3d.ui
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -881,6 +883,18 @@ fun KinetixStudioApp(
                         fontSize = 11.sp,
                         modifier = Modifier.weight(1f),
                     )
+                    if (exportState is ExportState.Success) {
+                        TextButton(
+                            onClick = {
+                                val intent =
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(exportState.uri))
+                                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                runCatching { context.startActivity(intent) }
+                            },
+                        ) {
+                            Text("Open")
+                        }
+                    }
                 }
                 if (exporting) {
                     LinearProgressIndicator(
