@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -233,7 +234,7 @@ fun KinetixStudioApp(
         when (val state = exportState) {
             ExportState.Idle -> null
             is ExportState.Running -> "exporting…"
-            is ExportState.Success -> "exported ${state.frames} frames → ${state.uri}"
+            is ExportState.Success -> "exported ${state.frames} frames"
             is ExportState.Failure -> "export failed: ${state.message}"
             ExportState.Cancelled -> "export cancelled"
         }
@@ -1063,15 +1064,6 @@ fun KinetixStudioApp(
                     ) {
                         Text("Import")
                     }
-                    Text(
-                        text =
-                            exportStatus
-                                ?: "hardware H.264 · $exportWidth×$exportHeight · " +
-                                "${exportBitRate / 1_000_000} Mbps",
-                        color = StudioMuted,
-                        fontSize = 11.sp,
-                        modifier = Modifier.weight(1f),
-                    )
                     if (exportState is ExportState.Success) {
                         TextButton(
                             onClick = {
@@ -1090,6 +1082,17 @@ fun KinetixStudioApp(
                         }
                     }
                 }
+                Text(
+                    text =
+                        exportStatus
+                            ?: "hardware H.264 · $exportWidth×$exportHeight · " +
+                            "${exportBitRate / 1_000_000} Mbps",
+                    color = StudioMuted,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (exporting) {
                     LinearProgressIndicator(
                         progress = { exportProgress },
