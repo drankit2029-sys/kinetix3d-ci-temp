@@ -188,6 +188,7 @@ fun KinetixStudioApp(
     mediaPath: String? = null,
     exportState: ExportState = ExportState.Idle,
     onExport: (ExportRequest) -> Unit = {},
+    onCancelExport: () -> Unit = {},
     projects: List<ProjectSummary> = emptyList(),
     onOpenProject: (String) -> Unit = {},
     onNewProject: () -> Unit = {},
@@ -1019,7 +1020,7 @@ fun KinetixStudioApp(
                 ) {
                     Button(
                         onClick = {
-                            val path = activeMediaPath ?: return@Button
+                            val path = activeSourcePath ?: return@Button
                             if (path.endsWith(".png", true) || path.endsWith(".jpg", true) ||
                                 path.endsWith(".jpeg", true)
                             ) {
@@ -1029,13 +1030,13 @@ fun KinetixStudioApp(
                                 ExportRequest(
                                     sourcePath = path,
                                     startUs = rangeStartUs,
-                                    durationUs = rangeEndUs,
+                                    durationUs = (rangeEndUs - rangeStartUs).coerceAtLeast(1L),
                                     width = exportWidth,
                                     height = exportHeight,
                                     fps = settings.fps,
                                     effects = selectedEffects,
                                     overlayPath =
-                                        if (selectedEffects == listOf("composite")) activeMediaPath else null,
+                                        if (selectedEffects == listOf("composite")) overlaySourcePath else null,
                                     overlayPtsOffsetUs =
                                         if (selectedEffects == listOf("composite") && overlayClip != null) {
                                             overlayClip.sourceInUs - overlayClip.startUs
@@ -1081,6 +1082,11 @@ fun KinetixStudioApp(
                             },
                         ) {
                             Text("Open")
+                        }
+                    }
+                    if (exporting) {
+                        TextButton(onClick = onCancelExport) {
+                            Text("Cancel")
                         }
                     }
                 }

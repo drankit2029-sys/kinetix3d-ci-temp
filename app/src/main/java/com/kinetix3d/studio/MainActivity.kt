@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 mediaPath = demoMediaPath(context),
                 exportState = exportState,
                 onExport = { request -> ExportForegroundService.start(context, request) },
+                onCancelExport = { ExportForegroundService.cancel(context) },
                 projects = projects,
                 onOpenProject = { projectId ->
                     activeProjectId = projectId

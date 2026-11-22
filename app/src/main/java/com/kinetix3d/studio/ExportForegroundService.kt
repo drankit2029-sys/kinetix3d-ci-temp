@@ -252,6 +252,12 @@ class ExportForegroundService : Service() {
             ContextCompat.startForegroundService(context, intent)
         }
 
+        fun cancel(context: Context) {
+            val intent =
+                Intent(context, ExportForegroundService::class.java).setAction(ACTION_CANCEL)
+            context.startService(intent)
+        }
+
         private fun Intent.toExportRequest(): ExportRequest? {
             val source = getStringExtra(EXTRA_SOURCE) ?: return null
             return ExportRequest(
