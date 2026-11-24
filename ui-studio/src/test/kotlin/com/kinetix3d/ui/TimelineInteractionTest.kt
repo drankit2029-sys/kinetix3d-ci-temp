@@ -5,6 +5,7 @@ import com.kinetix3d.model.TimelineMarker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TimelineInteractionTest {
     private val clip = TimelineClipUi("clip", "Clip", 1_000_000L, 4_000_000L, Color.Blue)
@@ -19,6 +20,28 @@ class TimelineInteractionTest {
     private val trackPx = 44f
     private val durationUs = 10_000_000L
     private val edgeHitPx = 24f
+
+    @Test
+    fun `snapUs picks the nearest target within the threshold`() {
+        assertEquals(1_000_000L, snapUs(1_050_000L, listOf(0L, 1_000_000L, 2_000_000L), 100_000L))
+        assertEquals(1_050_000L, snapUs(1_050_000L, listOf(0L, 1_000_000L), 10_000L))
+        assertEquals(1_050_000L, snapUs(1_050_000L, emptyList(), 100_000L))
+    }
+
+    @Test
+    fun `snapTargets include clip edges, playhead and markers`() {
+        val markers = listOf(TimelineMarker("m1", 3_000_000L))
+        val withClip = snapTargetsUs(project, 500_000L, markers, null)
+        assertTrue(1_000_000L in withClip)
+        assertTrue(5_000_000L in withClip)
+        assertTrue(500_000L in withClip)
+        assertTrue(3_000_000L in withClip)
+        val withoutClip = snapTargetsUs(project, 500_000L, markers, "clip")
+        assertTrue(1_000_000L !in withoutClip)
+        assertTrue(5_000_000L !in withoutClip)
+        assertTrue(500_000L in withoutClip)
+        assertTrue(3_000_000L in withoutClip)
+    }
 
     @Test
     fun `marker ticks have a coarse hit target`() {

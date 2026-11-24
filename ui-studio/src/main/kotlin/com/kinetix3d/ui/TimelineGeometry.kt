@@ -6,6 +6,7 @@
 
 package com.kinetix3d.ui
 
+import com.kinetix3d.model.TimelineMarker
 import kotlin.math.abs
 
 internal const val MIN_CLIP_DURATION_US = 100_000L
@@ -101,6 +102,39 @@ internal fun xToUs(
     val fraction = (x.coerceIn(0f, widthPx) / widthPx)
     return (fraction * durationUs).toLong().coerceIn(0L, durationUs)
 }
+
+/** Snaps [candidateUs] to the nearest target within [thresholdUs]. */
+internal fun snapUs(
+    candidateUs: Long,
+    targetsUs: List<Long>,
+    thresholdUs: Long,
+): Long {
+    if (thresholdUs <= 0L) return candidateUs
+    return targetsUs
+        .minByOrNull { abs(it - candidateUs) }
+        ?.takeIf { abs(it - candidateUs) <= thresholdUs }
+        ?: candidateUs
+}
+
+/** Clip edges, the playhead and markers are snap targets; the dragged clip is excluded. */
+internal fun snapTargetsUs(
+    project: TimelineProjectUi,
+    playheadUs: Long,
+    markers: List<TimelineMarker>,
+    excludeClipId: String?,
+): List<Long> =
+    buildList {
+        project.tracks.forEach { track ->
+            track.clips.forEach { clip ->
+                if (clip.id != excludeClipId) {
+                    add(clip.startUs)
+                    add(clip.startUs + clip.durationUs)
+                }
+            }
+        }
+        add(playheadUs)
+        markers.forEach { add(it.ptsUs) }
+    }
 
 internal fun trimRange(
     startUs: Long,

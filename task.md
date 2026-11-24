@@ -145,7 +145,7 @@ Updated: 2026-11-19
 
 ## In progress
 - CI runs on the temporary public repo `drankit2029-sys/kinetix3d-ci-temp` (the main repo's Actions billing is blocked). Local build/tests/lint are green.
-- Heavy work moved to the Oracle Cloud VM (16 vCPU, 31 GB RAM, KVM; SSH over Cloudflare HTTPS). VM access doc: `../VM-ACCESS.md`; VM coordination log: `/home/ubuntu/talk.txt`. VM setup complete: JDK 21, Rust 1.100 + cargo-ndk 4.1.2 + four Android targets, NDK r28c, SDK platform 37.1, repo cloned; `:app:assembleDebug`, the full unit-test/lint suite, ktlint (101 files) and `cargo test` (8/8) are green there.
+- Heavy work moved to the Oracle Cloud VM (16 vCPU, 31 GB RAM, KVM; direct SSH on port 443 from campus + Cloudflare HTTPS fallback). VM access doc: `../VM-ACCESS.md`; VM coordination log: `/home/ubuntu/talk.txt`. VM setup complete: JDK 21, Rust 1.100 + cargo-ndk 4.1.2 + four Android targets, NDK r28c, SDK platform 37.1, repo cloned; `:app:assembleDebug`, the full unit-test/lint suite, ktlint (101 files) and `cargo test` (8/8) are green there.
 - Re-verify culling/transient trim, audio/mute/Rust limiter/drift, per-asset waveforms, the V2 composite, slip/slide, composite export, cancel/completion, Fit, project switching, media pool, markers, bitrate/resolution, Open, Oscillate, Optics, Style and Corner Pin on a stable display.
 
 ## Next

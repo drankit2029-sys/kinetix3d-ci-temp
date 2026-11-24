@@ -544,6 +544,7 @@ private fun TimelineCanvas(
     val markerHitPx = with(density) { MARKER_HIT_DP.dp.toPx() }
     val totalHeight = rulerPx + trackPx * project.tracks.size
     val currentProject by rememberUpdatedState(project)
+    val currentPlayhead by rememberUpdatedState(playheadUs)
     val currentMarkers by rememberUpdatedState(markers)
     val currentSelectedClipId by rememberUpdatedState(selectedClipId)
     val currentOnSelectClip by rememberUpdatedState(onSelectClip)
@@ -561,6 +562,13 @@ private fun TimelineCanvas(
     var moveClip by remember { mutableStateOf<TimelineClipUi?>(null) }
     var moveStartUs by remember { mutableLongStateOf(0L) }
     var moveDeltaUs by remember { mutableLongStateOf(0L) }
+    var moveSnappedUs by remember { mutableLongStateOf(0L) }
+    val snapThresholdUs =
+        if (widthPx > 0f) {
+            (with(density) { SNAP_DP.dp.toPx() } / widthPx * durationUs).toLong()
+        } else {
+            0L
+        }
 
     Canvas(
         modifier =
@@ -638,6 +646,7 @@ private fun TimelineCanvas(
                                     moveClip = bodyHit
                                     moveStartUs = bodyHit.startUs
                                     moveDeltaUs = 0L
+                                    moveSnappedUs = bodyHit.startUs
                                     currentOnSelectClip(bodyHit.id)
                                     currentOnMoveClipStart(bodyHit.id)
                                 } else {
@@ -648,7 +657,7 @@ private fun TimelineCanvas(
                         onDragEnd = {
                             val moving = moveClip
                             if (moving != null) {
-                                currentOnMoveClipEnd(moving.id, (moveStartUs + moveDeltaUs).coerceAtLeast(0L))
+                                currentOnMoveClipEnd(moving.id, moveSnappedUs)
                             }
                             if (trimHit != null) currentOnTrimEnd()
                             trimHit = null
@@ -665,17 +674,54 @@ private fun TimelineCanvas(
                             val moving = moveClip
                             if (hit != null) {
                                 trimDeltaUs += (dragAmount.x / widthPx * durationUs.toFloat()).toLong()
-                                val (newStart, newEnd) =
+                                val (rawStart, rawEnd) =
                                     trimRange(
                                         startUs = trimStartUs,
                                         endUs = trimEndUs,
                                         deltaUs = trimDeltaUs,
                                         edge = hit.edge,
                                     )
+                                val targets =
+                                    snapTargetsUs(
+                                        project = currentProject,
+                                        playheadUs = currentPlayhead,
+                                        markers = currentMarkers,
+                                        excludeClipId = hit.clip.id,
+                                    )
+                                val newStart =
+                                    if (hit.edge == ClipEdge.START) {
+                                        snapUs(rawStart, targets, snapThresholdUs)
+                                    } else {
+                                        rawStart
+                                    }
+                                val newEnd =
+                                    if (hit.edge == ClipEdge.END) {
+                                        snapUs(rawEnd, targets, snapThresholdUs)
+                                    } else {
+                                        rawEnd
+                                    }
                                 currentOnTrimClip(hit.clip.id, newStart, newEnd)
                             } else if (moving != null) {
                                 moveDeltaUs += (dragAmount.x / widthPx * durationUs.toFloat()).toLong()
-                                currentOnMoveClip(moving.id, (moveStartUs + moveDeltaUs).coerceAtLeast(0L))
+                                val rawStart = (moveStartUs + moveDeltaUs).coerceAtLeast(0L)
+                                val targets =
+                                    snapTargetsUs(
+                                        project = currentProject,
+                                        playheadUs = currentPlayhead,
+                                        markers = currentMarkers,
+                                        excludeClipId = moving.id,
+                                    )
+                                val snappedStart = snapUs(rawStart, targets, snapThresholdUs)
+                                val rawEnd = rawStart + moving.durationUs
+                                val snappedEnd = snapUs(rawEnd, targets, snapThresholdUs)
+                                val finalStart =
+                                    when {
+                                        snappedStart != rawStart -> snappedStart
+                                        snappedEnd != rawEnd -> snappedEnd - moving.durationUs
+                                        else -> rawStart
+                                    }.coerceAtLeast(0L)
+                                moveSnappedUs = finalStart
+                                currentOnMoveClip(moving.id, finalStart)
                             } else {
                                 currentOnPlayheadChange(xToUs(change.position.x, widthPx, durationUs))
                             }
@@ -813,6 +859,7 @@ private fun TimelineCanvas(
 
 private const val TRIM_STEP_US = 500_000L
 private const val MARKER_HIT_DP = 12f
+private const val SNAP_DP = 10f
 
 private fun formatTime(us: Long): String {
     val totalMs = (us / 1_000L).coerceAtLeast(0L)
