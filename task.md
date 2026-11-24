@@ -121,6 +121,7 @@ Updated: 2026-11-19
 - Playhead follow: during playback the timeline scrolls to keep the playhead visible, centering it when it leaves the viewport. Verified on the API 36 emulator: playback at 00:03.422 with the timeline scrolled to the playhead.
 - Fullscreen preview: the **Full** button expands the preview to the screen height with an **Exit** overlay; verified on the API 36 emulator (letterboxed 16:9 video, Exit returns to the editor). On the phone the Exit button is a `Popup` above the SurfaceView (Compose overlays inside the preview Box are hidden by the SurfaceView), and the system Back button also exits.
 - Phone sign-off (SM-M366B, USB): snapping verified (Title start snapped to 0s); fullscreen preview verified (Exit Popup visible and working); playback + audio master clock verified (00:03.800, 59 fps, AudioTrack 48 kHz stereo); the timeline follows the playhead.
+- Phone export sign-off: **180 frames** (3s at 60 fps) exported on the SM-M366B hardware encoder; the completion notification and **Open** button were verified.
 
 ## MVP plan (target 2-4 weeks)
 
