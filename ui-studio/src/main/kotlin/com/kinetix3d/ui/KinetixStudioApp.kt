@@ -203,6 +203,7 @@ fun KinetixStudioApp(
     var selectedEffects by remember { mutableStateOf<List<String>>(emptyList()) }
     var compositeBlendMode by remember { mutableIntStateOf(0) }
     var showFxRack by remember { mutableStateOf(true) }
+    var previewFullscreen by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var renderStats by remember { mutableStateOf(RenderStats()) }
@@ -978,10 +979,17 @@ fun KinetixStudioApp(
                 }
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(12.dp)),
+                        if (previewFullscreen) {
+                            Modifier
+                                .fillMaxWidth()
+                                .height(screenHeightDp.dp)
+                                .background(Color.Black)
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(12.dp))
+                        },
                 ) {
                     AndroidView(
                         factory = { context ->
@@ -1009,6 +1017,14 @@ fun KinetixStudioApp(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
+                    if (previewFullscreen) {
+                        TextButton(
+                            onClick = { previewFullscreen = false },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        ) {
+                            Text("Exit")
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1029,6 +1045,12 @@ fun KinetixStudioApp(
                         modifier = Modifier.height(32.dp),
                     ) {
                         Text(if (showFxRack) "Hide FX" else "Show FX", fontSize = 11.sp)
+                    }
+                    TextButton(
+                        onClick = { previewFullscreen = true },
+                        modifier = Modifier.height(32.dp),
+                    ) {
+                        Text("Full", fontSize = 11.sp)
                     }
                 }
                 Text(
