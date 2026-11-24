@@ -265,6 +265,7 @@ fun TimelinePanel(
         clock.seekTo(currentPlayhead, startNanos)
         clock.play(startNanos)
         while (isPlaying) {
+            var scrollTarget = -1
             withFrameNanos { frameNanos ->
                 val audio = currentAudioPosition?.invoke()
                 if (audio != null) {
@@ -276,7 +277,14 @@ fun TimelinePanel(
                     currentOnPlayheadChange(next)
                     if (!clock.isPlaying) currentOnPlayingChange(false)
                 }
+                val playheadPx = (currentPlayhead.toFloat() / durationUs * timelineWidthPx)
+                if (playheadPx < scrollState.value ||
+                    playheadPx > scrollState.value + viewportWidthPx
+                ) {
+                    scrollTarget = (playheadPx - viewportWidthPx / 2).toInt().coerceAtLeast(0)
+                }
             }
+            if (scrollTarget >= 0) scrollState.scrollTo(scrollTarget)
         }
     }
 
