@@ -15,6 +15,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -85,6 +86,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
 import com.kinetix3d.media.AudioPlayback
 import com.kinetix3d.media.DecoderPoolManager
 import com.kinetix3d.media.KinetixAudioNative
@@ -204,6 +206,7 @@ fun KinetixStudioApp(
     var compositeBlendMode by remember { mutableIntStateOf(0) }
     var showFxRack by remember { mutableStateOf(true) }
     var previewFullscreen by remember { mutableStateOf(false) }
+    BackHandler(enabled = previewFullscreen) { previewFullscreen = false }
     var isPlaying by remember { mutableStateOf(false) }
     var persistenceStatus by remember { mutableStateOf("in-memory demo") }
     var renderStats by remember { mutableStateOf(RenderStats()) }
@@ -1017,12 +1020,17 @@ fun KinetixStudioApp(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    if (previewFullscreen) {
+                }
+                if (previewFullscreen) {
+                    Popup(alignment = Alignment.TopEnd) {
                         TextButton(
                             onClick = { previewFullscreen = false },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                            modifier =
+                                Modifier
+                                    .padding(16.dp)
+                                    .background(Color(0x99000000), RoundedCornerShape(8.dp)),
                         ) {
-                            Text("Exit")
+                            Text("Exit", color = Color.White)
                         }
                     }
                 }
